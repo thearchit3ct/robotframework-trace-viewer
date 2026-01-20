@@ -326,18 +326,17 @@ class TestBuiltInProperty:
         capture = VariablesCapture()
         assert capture._builtin is None
 
-        # Patch at the point of import within the builtin property
-        with patch.dict("sys.modules", {"robot.libraries.BuiltIn": MagicMock()}):
-            # We need to import the module fresh or mock at the right place
-            mock_builtin_instance = MagicMock()
+        # Patch BuiltIn at its source location since it's imported inline
+        mock_builtin_instance = MagicMock()
+        mock_builtin_class = MagicMock(return_value=mock_builtin_instance)
+        with patch.dict(
+            "sys.modules",
+            {"robot.libraries.BuiltIn": MagicMock(BuiltIn=mock_builtin_class)},
+        ):
+            result = capture.builtin
 
-            # Directly set _builtin to simulate what the property does
-            # This tests that accessing builtin when _builtin is None will set it
-            with patch("robot.libraries.BuiltIn.BuiltIn", return_value=mock_builtin_instance):
-                result = capture.builtin
-
-                assert result is mock_builtin_instance
-                assert capture._builtin is mock_builtin_instance
+            assert result is mock_builtin_instance
+            assert capture._builtin is mock_builtin_instance
 
     def test_builtin_caches_instance(self) -> None:
         """The builtin property should cache the instance."""
