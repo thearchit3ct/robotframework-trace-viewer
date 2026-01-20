@@ -208,7 +208,7 @@ class ViewerGenerator:
         Returns:
             List of keyword dictionaries sorted by index.
         """
-        keywords = []
+        keywords: list[dict[str, Any]] = []
         keywords_dir = trace_dir / "keywords"
 
         if not keywords_dir.exists():

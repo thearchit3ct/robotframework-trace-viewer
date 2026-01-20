@@ -147,7 +147,9 @@ class TraceListener(ListenerV3):
         """
         self.output_dir = Path(output_dir)
         self.capture_mode: CaptureMode = (
-            capture_mode if capture_mode in ("full", "on_failure", "disabled") else "full"
+            capture_mode  # type: ignore[assignment]
+            if capture_mode in ("full", "on_failure", "disabled")
+            else "full"
         )
 
         # Create output directory if it doesn't exist

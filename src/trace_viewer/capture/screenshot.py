@@ -65,7 +65,7 @@ class ScreenshotCapture:
                 None otherwise.
         """
         try:
-            return self.builtin.get_library_instance("SeleniumLibrary")
+            return self.builtin.get_library_instance("SeleniumLibrary")  # type: ignore[no-any-return]
         except RuntimeError:
             return None
 
@@ -80,7 +80,7 @@ class ScreenshotCapture:
         if selenium_library is None:
             return None
         try:
-            return selenium_library.driver  # type: ignore[attr-defined]
+            return selenium_library.driver  # type: ignore[attr-defined, no-any-return]
         except Exception:
             return None
 
