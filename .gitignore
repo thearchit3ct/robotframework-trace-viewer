@@ -154,6 +154,8 @@ Thumbs.db
 # Project-specific
 traces/
 *.trace/
+e2e_traces/
+e2e_traces_pabot/
 output.xml
 log.html
 report.html
