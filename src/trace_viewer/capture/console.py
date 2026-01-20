@@ -115,7 +115,7 @@ class ConsoleCapture:
             return False
         try:
             # Check if 'browser' is in the available log types
-            log_types = driver.log_types
+            log_types = driver.log_types  # type: ignore[attr-defined]
             return "browser" in log_types
         except Exception:
             return False
@@ -149,11 +149,11 @@ class ConsoleCapture:
 
         try:
             # Check if browser logging is supported
-            if "browser" not in driver.log_types:
+            if "browser" not in driver.log_types:  # type: ignore[attr-defined]
                 return []
 
             # Get browser logs
-            raw_logs = driver.get_log("browser")
+            raw_logs = driver.get_log("browser")  # type: ignore[attr-defined]
 
             # Transform logs to our standardized format
             logs: list[dict[str, Any]] = []
