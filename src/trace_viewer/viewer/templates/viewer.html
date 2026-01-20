@@ -270,7 +270,7 @@
             background: var(--bg-primary);
             border-top: 1px solid var(--border-color);
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             overflow: hidden;
         }
 
@@ -369,6 +369,95 @@
             font-size: 0.875rem;
         }
 
+        /* Console logs panel */
+        .console-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .console-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 0.8125rem;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+        }
+
+        .console-item.severe {
+            background-color: #fee2e2;
+            border-left: 3px solid var(--color-fail);
+        }
+
+        .console-item.warning {
+            background-color: #fef9c3;
+            border-left: 3px solid var(--color-skip);
+        }
+
+        .console-item.info {
+            background-color: #e0f2fe;
+            border-left: 3px solid #0ea5e9;
+        }
+
+        .console-level {
+            font-weight: 600;
+            font-size: 0.6875rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .console-level.severe {
+            background: var(--color-fail);
+            color: white;
+        }
+
+        .console-level.warning {
+            background: var(--color-skip);
+            color: #713f12;
+        }
+
+        .console-level.info {
+            background: #0ea5e9;
+            color: white;
+        }
+
+        .console-level.debug,
+        .console-level.log {
+            background: var(--text-secondary);
+            color: white;
+        }
+
+        .console-message {
+            word-break: break-all;
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        .console-source {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        .console-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .no-console-logs {
+            color: var(--text-secondary);
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
         /* Keyboard hints */
         .keyboard-hints {
             position: fixed;
@@ -417,9 +506,13 @@
                 grid-template-columns: 1fr;
             }
 
-            .panel:first-child {
+            .panel {
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
+            }
+
+            .panel:last-child {
+                border-bottom: none;
             }
 
             .keyboard-hints {
@@ -472,6 +565,12 @@
                     <p class="no-variables">No variables captured</p>
                 </div>
             </div>
+            <div class="panel">
+                <h2 class="panel-title">Console Logs <span class="console-count" id="console-count"></span></h2>
+                <div class="console-list" id="console-panel">
+                    <p class="no-console-logs">No console logs captured</p>
+                </div>
+            </div>
         </footer>
     </div>
 
@@ -505,7 +604,9 @@
                 keywordList: document.getElementById('keyword-list'),
                 mainContent: document.getElementById('main-content'),
                 metadataPanel: document.getElementById('metadata-panel'),
-                variablesPanel: document.getElementById('variables-panel')
+                variablesPanel: document.getElementById('variables-panel'),
+                consolePanel: document.getElementById('console-panel'),
+                consoleCount: document.getElementById('console-count')
             };
 
             /**
@@ -649,6 +750,7 @@
                 displayScreenshot(keyword);
                 displayMetadata(keyword);
                 displayVariables(keyword);
+                displayConsoleLogs(keyword);
             }
 
             /**
@@ -755,6 +857,45 @@
                 }).join('');
 
                 elements.variablesPanel.innerHTML = html;
+            }
+
+            /**
+             * Display console logs for a keyword
+             * @param {Object} keyword - Keyword data
+             */
+            function displayConsoleLogs(keyword) {
+                const logs = keyword.console_logs || [];
+
+                // Update count display
+                if (logs.length > 0) {
+                    elements.consoleCount.textContent = `(${logs.length})`;
+                } else {
+                    elements.consoleCount.textContent = '';
+                }
+
+                if (logs.length === 0) {
+                    elements.consolePanel.innerHTML = '<p class="no-console-logs">No console logs captured</p>';
+                    return;
+                }
+
+                const html = logs.map(log => {
+                    const level = (log.level || 'INFO').toUpperCase();
+                    const levelClass = level.toLowerCase();
+                    const message = escapeHtml(log.message || '');
+                    const source = log.source ? `<div class="console-source">${escapeHtml(log.source)}</div>` : '';
+
+                    return `
+                        <div class="console-item ${levelClass}">
+                            <span class="console-level ${levelClass}">${level}</span>
+                            <div style="flex: 1;">
+                                <div class="console-message">${message}</div>
+                                ${source}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                elements.consolePanel.innerHTML = html;
             }
 
             /**

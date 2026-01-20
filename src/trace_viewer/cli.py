@@ -2,8 +2,9 @@
 
 import json
 import webbrowser
+import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import click
 
@@ -158,6 +159,87 @@ def info(trace_path: str) -> None:
                 )
         if len(keywords) > 10:
             click.echo(f"  ... and {len(keywords) - 10} more")
+
+
+@main.command()
+@click.argument("trace_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Output ZIP file path. Defaults to <trace_name>.zip in current directory.",
+)
+def export(trace_path: str, output: Optional[str]) -> None:
+    """Export a trace as a standalone ZIP archive.
+
+    Creates a ZIP file containing all trace files including manifest.json,
+    keywords directory with metadata and screenshots, and viewer.html.
+    The ZIP can be shared and opened on any machine without requiring
+    the trace-viewer tool.
+
+    Args:
+        trace_path: Path to the trace directory to export.
+        output: Optional output path for the ZIP file. If not specified,
+            creates <trace_name>.zip in the current directory.
+
+    Raises:
+        SystemExit: If manifest.json is not found in the trace directory
+            or if the ZIP file cannot be created.
+
+    Examples:
+        trace-viewer export ./traces/my_test_20250119_143022
+        trace-viewer export ./traces/my_test --output /tmp/my_trace.zip
+    """
+    path = Path(trace_path)
+    manifest = path / "manifest.json"
+
+    if not manifest.exists():
+        click.echo(f"Error: No manifest.json found in {trace_path}", err=True)
+        click.echo("This does not appear to be a valid trace directory.", err=True)
+        raise SystemExit(1)
+
+    # Determine output path
+    if output is None:
+        output_path = Path.cwd() / f"{path.name}.zip"
+    else:
+        output_path = Path(output)
+        # Ensure .zip extension
+        if output_path.suffix.lower() != ".zip":
+            output_path = output_path.with_suffix(".zip")
+
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        _create_trace_zip(path, output_path)
+        click.echo(f"Trace exported to: {output_path}")
+        click.echo(f"Archive size: {output_path.stat().st_size:,} bytes")
+    except OSError as e:
+        click.echo(f"Error: Failed to create ZIP archive: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+def _create_trace_zip(trace_dir: Path, output_path: Path) -> None:
+    """Create a ZIP archive containing all trace files.
+
+    Recursively adds all files from the trace directory to the ZIP archive,
+    preserving the directory structure. Files are stored with paths relative
+    to the trace directory root.
+
+    Args:
+        trace_dir: Path to the trace directory to archive.
+        output_path: Path where the ZIP file will be created.
+
+    Raises:
+        OSError: If the ZIP file cannot be created or written.
+    """
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in trace_dir.rglob("*"):
+            if file_path.is_file():
+                # Calculate relative path from trace directory
+                arcname = file_path.relative_to(trace_dir)
+                zf.write(file_path, arcname)
 
 
 if __name__ == "__main__":

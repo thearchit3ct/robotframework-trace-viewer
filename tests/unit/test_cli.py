@@ -247,3 +247,161 @@ class TestOpenCommand:
         """Test open command with nonexistent path."""
         result = runner.invoke(main, ["open", "/nonexistent/trace"])
         assert result.exit_code != 0
+
+
+class TestExportCommand:
+    """Tests for the export command."""
+
+    def test_export_command_creates_zip(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export command creates a valid ZIP archive."""
+        output_zip = tmp_path / "exported.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_zip)])
+
+        assert result.exit_code == 0
+        assert output_zip.exists()
+        assert "Trace exported to:" in result.output
+        assert "Archive size:" in result.output
+
+    def test_export_command_default_output(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export command uses trace name for default output."""
+        # Change to tmp_path for the default output location
+        import os
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = runner.invoke(main, ["export", str(sample_trace)])
+            assert result.exit_code == 0
+
+            # Default output should be <trace_name>.zip in current directory
+            expected_zip = tmp_path / f"{sample_trace.name}.zip"
+            assert expected_zip.exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_export_command_zip_contents(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test exported ZIP contains all expected files."""
+        import zipfile
+
+        output_zip = tmp_path / "exported.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_zip)])
+        assert result.exit_code == 0
+
+        with zipfile.ZipFile(output_zip, "r") as zf:
+            names = zf.namelist()
+
+            # Check for expected files
+            assert "manifest.json" in names
+            assert "viewer.html" in names
+
+            # Check for keywords directory structure
+            keyword_files = [n for n in names if n.startswith("keywords/")]
+            assert len(keyword_files) > 0
+
+            # Check for metadata.json in keyword directories
+            metadata_files = [n for n in names if n.endswith("metadata.json")]
+            assert len(metadata_files) >= 1  # At least the manifest and keyword metadata
+
+    def test_export_command_no_manifest(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Test export command fails when no manifest.json exists."""
+        empty_dir = tmp_path / "empty_trace"
+        empty_dir.mkdir()
+
+        result = runner.invoke(main, ["export", str(empty_dir)])
+        assert result.exit_code == 1
+        assert "No manifest.json found" in result.output
+        assert "not appear to be a valid trace directory" in result.output
+
+    def test_export_command_nonexistent_path(self, runner: CliRunner) -> None:
+        """Test export command with nonexistent path."""
+        result = runner.invoke(main, ["export", "/nonexistent/trace"])
+        assert result.exit_code != 0
+
+    def test_export_command_adds_zip_extension(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export command adds .zip extension if not provided."""
+        output_path = tmp_path / "my_export"  # No .zip extension
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_path)])
+
+        assert result.exit_code == 0
+        expected_zip = tmp_path / "my_export.zip"
+        assert expected_zip.exists()
+        assert not (tmp_path / "my_export").exists()
+
+    def test_export_command_creates_parent_directories(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export command creates parent directories if needed."""
+        output_zip = tmp_path / "nested" / "dir" / "exported.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_zip)])
+
+        assert result.exit_code == 0
+        assert output_zip.exists()
+
+    def test_export_command_short_option(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export command with -o short option."""
+        output_zip = tmp_path / "short_option.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "-o", str(output_zip)])
+
+        assert result.exit_code == 0
+        assert output_zip.exists()
+
+    def test_export_command_zip_is_valid(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test that exported ZIP is a valid, extractable archive."""
+        import zipfile
+
+        output_zip = tmp_path / "valid_test.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_zip)])
+        assert result.exit_code == 0
+
+        # Verify it's a valid ZIP file
+        assert zipfile.is_zipfile(output_zip)
+
+        # Try extracting it
+        extract_dir = tmp_path / "extracted"
+        with zipfile.ZipFile(output_zip, "r") as zf:
+            zf.extractall(extract_dir)
+
+        # Verify extracted content
+        assert (extract_dir / "manifest.json").exists()
+        assert (extract_dir / "viewer.html").exists()
+        assert (extract_dir / "keywords").is_dir()
+
+    def test_export_command_with_screenshots(
+        self, runner: CliRunner, sample_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test export includes screenshot files if present."""
+        import zipfile
+
+        # Add a screenshot to one of the keywords
+        keywords_dir = sample_trace / "keywords"
+        first_keyword = next(keywords_dir.iterdir())
+        screenshot_path = first_keyword / "screenshot.png"
+        # Create a minimal valid PNG (1x1 transparent pixel)
+        png_data = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+            b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        screenshot_path.write_bytes(png_data)
+
+        output_zip = tmp_path / "with_screenshot.zip"
+        result = runner.invoke(main, ["export", str(sample_trace), "--output", str(output_zip)])
+        assert result.exit_code == 0
+
+        with zipfile.ZipFile(output_zip, "r") as zf:
+            names = zf.namelist()
+            screenshot_files = [n for n in names if n.endswith("screenshot.png")]
+            assert len(screenshot_files) == 1

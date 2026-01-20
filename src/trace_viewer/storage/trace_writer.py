@@ -216,6 +216,23 @@ class TraceWriter:
         screenshot_path.write_bytes(png_data)
         return screenshot_path
 
+    def write_console_logs(self, keyword_dir: Path, logs: list[dict[str, Any]]) -> Path:
+        """Write console.json for a keyword.
+
+        Contains browser console logs captured during keyword execution.
+        Each log entry includes level, message, source, and timestamp.
+
+        Args:
+            keyword_dir: Path to the keyword directory.
+            logs: List of console log entries.
+
+        Returns:
+            Path to the written console logs file.
+        """
+        console_path = keyword_dir / "console.json"
+        self._write_json_atomic(console_path, {"logs": logs})
+        return console_path
+
     def _write_json_atomic(self, path: Path, data: dict[str, Any]) -> None:
         """Write JSON atomically using write-to-tmp-then-rename pattern.
 

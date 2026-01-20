@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from robot.api.interfaces import ListenerV3
 
+from trace_viewer.capture.console import ConsoleCapture
 from trace_viewer.capture.screenshot import ScreenshotCapture
 from trace_viewer.capture.variables import VariablesCapture
 from trace_viewer.storage.trace_writer import TraceWriter
@@ -159,6 +160,7 @@ class TraceListener(ListenerV3):
         self.trace_writer = TraceWriter(str(self.output_dir))
         self.screenshot_capture = ScreenshotCapture()
         self.variables_capture = VariablesCapture()
+        self.console_capture = ConsoleCapture()
         self.viewer_generator: Any | None = None
         if _HAS_VIEWER_GENERATOR and ViewerGenerator is not None:
             self.viewer_generator = ViewerGenerator()
@@ -358,9 +360,26 @@ class TraceListener(ListenerV3):
             except Exception as e:
                 logger.debug("Variables capture failed: %s", e)
                 keyword_data["has_variables"] = False
+
+            # Capture console logs
+            try:
+                console_logs = self.console_capture.capture()
+                if console_logs:
+                    self.trace_writer.write_console_logs(keyword_dir, console_logs)
+                    keyword_data["has_console_logs"] = True
+                    keyword_data["console_logs_count"] = len(console_logs)
+                else:
+                    keyword_data["has_console_logs"] = False
+                    keyword_data["console_logs_count"] = 0
+            except Exception as e:
+                logger.debug("Console logs capture failed: %s", e)
+                keyword_data["has_console_logs"] = False
+                keyword_data["console_logs_count"] = 0
         else:
             keyword_data["has_screenshot"] = False
             keyword_data["has_variables"] = False
+            keyword_data["has_console_logs"] = False
+            keyword_data["console_logs_count"] = 0
 
         # Save metadata.json in keyword folder using trace_writer
         self.trace_writer.write_keyword_metadata(keyword_dir, keyword_data)

@@ -136,6 +136,7 @@ class ViewerGenerator:
             "duration_ms": keyword.get("duration_ms", 0),
             "args": keyword.get("args", []),
             "variables": keyword.get("variables", {}),
+            "console_logs": keyword.get("console_logs", []),
             "level": keyword.get("level", 0),
             "parent": keyword.get("parent"),
             "message": keyword.get("message", ""),
@@ -263,6 +264,18 @@ class ViewerGenerator:
                     keyword["variables"] = json.load(f)
             except json.JSONDecodeError:
                 keyword["variables"] = {}
+
+        # Load console logs
+        console_path = kw_dir / "console.json"
+        if console_path.exists():
+            try:
+                with open(console_path, encoding="utf-8") as f:
+                    console_data = json.load(f)
+                    keyword["console_logs"] = console_data.get("logs", [])
+            except json.JSONDecodeError:
+                keyword["console_logs"] = []
+        else:
+            keyword["console_logs"] = []
 
         # Check for screenshot
         screenshot_path = kw_dir / "screenshot.png"
