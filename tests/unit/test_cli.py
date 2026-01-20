@@ -405,3 +405,251 @@ class TestExportCommand:
             names = zf.namelist()
             screenshot_files = [n for n in names if n.endswith("screenshot.png")]
             assert len(screenshot_files) == 1
+
+
+class TestCompareCommand:
+    """Tests for the compare command."""
+
+    @pytest.fixture
+    def second_trace(self, temp_traces_dir: Path) -> Path:
+        """Create a second sample trace for comparison."""
+        trace_dir = temp_traces_dir / "second_test_20250119_150000"
+        trace_dir.mkdir()
+
+        manifest = {
+            "version": "1.0.0",
+            "tool_version": "0.1.0",
+            "test_name": "Login Should Also Work",
+            "suite_name": "Authentication",
+            "suite_source": "/tests/auth.robot",
+            "start_time": "2025-01-19T15:00:00.000Z",
+            "end_time": "2025-01-19T15:00:30.000Z",
+            "duration_ms": 30000,
+            "status": "FAIL",
+            "message": "Button not found",
+            "keywords_count": 3,
+            "rf_version": "7.0",
+            "browser": "chrome",
+            "capture_mode": "full",
+        }
+        with open(trace_dir / "manifest.json", "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        # Create keywords directory with sample keywords (different from sample_trace)
+        keywords_dir = trace_dir / "keywords"
+        keywords_dir.mkdir()
+
+        for i, (name, status) in enumerate(
+            [("Open Browser", "PASS"), ("Click Button", "FAIL"), ("Verify Text", "NOT RUN")],
+            start=1,
+        ):
+            kw_dir = keywords_dir / f"{i:03d}_{name.lower().replace(' ', '_')}"
+            kw_dir.mkdir()
+            kw_metadata = {
+                "index": i,
+                "name": name,
+                "library": "SeleniumLibrary",
+                "args": [],
+                "status": status,
+                "duration_ms": 200,
+            }
+            with open(kw_dir / "metadata.json", "w", encoding="utf-8") as f:
+                json.dump(kw_metadata, f)
+
+        return trace_dir
+
+    def test_compare_command_basic(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test basic compare command execution."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_html)],
+        )
+
+        assert result.exit_code == 0
+        assert output_html.exists()
+        assert "Comparing traces:" in result.output
+        assert "Comparison Summary:" in result.output
+        assert "Comparison report generated:" in result.output
+
+    def test_compare_command_default_output(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command uses default output path."""
+        import os
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = runner.invoke(main, ["compare", str(sample_trace), str(second_trace)])
+
+            assert result.exit_code == 0
+            expected_output = tmp_path / "comparison.html"
+            assert expected_output.exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_compare_command_shows_summary(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command displays summary statistics."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_html)],
+        )
+
+        assert result.exit_code == 0
+        assert "Total keywords:" in result.output
+        assert "Matched:" in result.output
+        assert "Modified:" in result.output
+
+    def test_compare_command_no_manifest_trace1(
+        self, runner: CliRunner, temp_traces_dir: Path, second_trace: Path
+    ) -> None:
+        """Test compare command fails when trace1 has no manifest."""
+        empty_dir = temp_traces_dir / "empty_trace"
+        empty_dir.mkdir()
+
+        result = runner.invoke(main, ["compare", str(empty_dir), str(second_trace)])
+
+        assert result.exit_code == 1
+        assert "No manifest.json found" in result.output
+
+    def test_compare_command_no_manifest_trace2(
+        self, runner: CliRunner, sample_trace: Path, temp_traces_dir: Path
+    ) -> None:
+        """Test compare command fails when trace2 has no manifest."""
+        empty_dir = temp_traces_dir / "empty_trace2"
+        empty_dir.mkdir()
+
+        result = runner.invoke(main, ["compare", str(sample_trace), str(empty_dir)])
+
+        assert result.exit_code == 1
+        assert "No manifest.json found" in result.output
+
+    def test_compare_command_nonexistent_trace1(
+        self, runner: CliRunner, second_trace: Path
+    ) -> None:
+        """Test compare command with nonexistent trace1 path."""
+        result = runner.invoke(main, ["compare", "/nonexistent/trace1", str(second_trace)])
+        assert result.exit_code != 0
+
+    def test_compare_command_nonexistent_trace2(
+        self, runner: CliRunner, sample_trace: Path
+    ) -> None:
+        """Test compare command with nonexistent trace2 path."""
+        result = runner.invoke(main, ["compare", str(sample_trace), "/nonexistent/trace2"])
+        assert result.exit_code != 0
+
+    @patch("trace_viewer.cli.webbrowser.open")
+    def test_compare_command_with_open_flag(
+        self,
+        mock_webbrowser: patch,
+        runner: CliRunner,
+        sample_trace: Path,
+        second_trace: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Test compare command with --open flag opens browser."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            [
+                "compare",
+                str(sample_trace),
+                str(second_trace),
+                "--output",
+                str(output_html),
+                "--open",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Opening in browser..." in result.output
+        mock_webbrowser.assert_called_once()
+        call_arg = mock_webbrowser.call_args[0][0]
+        assert "comparison.html" in call_arg
+        assert call_arg.startswith("file://")
+
+    @patch("trace_viewer.cli.webbrowser.open")
+    def test_compare_command_with_short_open_flag(
+        self,
+        mock_webbrowser: patch,
+        runner: CliRunner,
+        sample_trace: Path,
+        second_trace: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Test compare command with -O short flag."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "-o", str(output_html), "-O"],
+        )
+
+        assert result.exit_code == 0
+        mock_webbrowser.assert_called_once()
+
+    def test_compare_command_adds_html_extension(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command adds .html extension if not provided."""
+        output_path = tmp_path / "my_comparison"  # No .html extension
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_path)],
+        )
+
+        assert result.exit_code == 0
+        expected_html = tmp_path / "my_comparison.html"
+        assert expected_html.exists()
+
+    def test_compare_command_creates_parent_directories(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command creates parent directories if needed."""
+        output_html = tmp_path / "nested" / "dir" / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_html)],
+        )
+
+        assert result.exit_code == 0
+        assert output_html.exists()
+
+    def test_compare_command_output_content(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command generates valid HTML content."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_html)],
+        )
+
+        assert result.exit_code == 0
+        html_content = output_html.read_text(encoding="utf-8")
+
+        # Check for expected HTML elements
+        assert "<!DOCTYPE html>" in html_content
+        assert "Trace Comparison" in html_content
+        assert "COMPARISON_DATA" in html_content
+        assert "Login Should Work" in html_content  # From sample_trace
+        assert "Login Should Also Work" in html_content  # From second_trace
+
+    def test_compare_command_shows_status_changes(
+        self, runner: CliRunner, sample_trace: Path, second_trace: Path, tmp_path: Path
+    ) -> None:
+        """Test compare command shows status change count when present."""
+        output_html = tmp_path / "comparison.html"
+        result = runner.invoke(
+            main,
+            ["compare", str(sample_trace), str(second_trace), "--output", str(output_html)],
+        )
+
+        assert result.exit_code == 0
+        # The second trace has different statuses, so status changes should be reported
+        assert "Status changes:" in result.output

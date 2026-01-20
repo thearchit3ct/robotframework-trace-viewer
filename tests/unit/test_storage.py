@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
-from trace_viewer.storage import TraceWriter
+from trace_viewer.storage import (
+    TraceWriter,
+    get_pabot_id,
+    get_process_identifier,
+    is_pabot_execution,
+)
 
 
 class TestSlugify:
@@ -438,3 +443,218 @@ class TestTraceWriterInit:
 
         assert writer.get_current_trace_dir() is None
         assert writer.get_keyword_counter() == 0
+
+
+class TestIsPabotExecution:
+    """Tests for is_pabot_execution function."""
+
+    def test_returns_false_without_pabot_env_vars(self, monkeypatch):
+        """Test returns False when no Pabot env vars are set."""
+        # Clear all Pabot-related env vars
+        for var in [
+            "PABOTEXECUTIONPOOLID",
+            "PABOTQUEUEINDEX",
+            "PABOT_QUEUE_INDEX",
+            "PABOTLIBRARYSCOPE",
+        ]:
+            monkeypatch.delenv(var, raising=False)
+
+        assert is_pabot_execution() is False
+
+    def test_returns_true_with_pabotexecutionpoolid(self, monkeypatch):
+        """Test returns True when PABOTEXECUTIONPOOLID is set."""
+        for var in ["PABOTQUEUEINDEX", "PABOT_QUEUE_INDEX", "PABOTLIBRARYSCOPE"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "1")
+
+        assert is_pabot_execution() is True
+
+    def test_returns_true_with_pabotqueueindex(self, monkeypatch):
+        """Test returns True when PABOTQUEUEINDEX is set."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOT_QUEUE_INDEX", "PABOTLIBRARYSCOPE"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("PABOTQUEUEINDEX", "2")
+
+        assert is_pabot_execution() is True
+
+    def test_returns_true_with_pabot_queue_index_underscore(self, monkeypatch):
+        """Test returns True when PABOT_QUEUE_INDEX is set (underscore variant)."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOTQUEUEINDEX", "PABOTLIBRARYSCOPE"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("PABOT_QUEUE_INDEX", "3")
+
+        assert is_pabot_execution() is True
+
+    def test_returns_true_with_pabotlibraryscope(self, monkeypatch):
+        """Test returns True when PABOTLIBRARYSCOPE is set."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOTQUEUEINDEX", "PABOT_QUEUE_INDEX"]:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("PABOTLIBRARYSCOPE", "GLOBAL")
+
+        assert is_pabot_execution() is True
+
+    def test_returns_true_with_multiple_pabot_vars(self, monkeypatch):
+        """Test returns True when multiple Pabot env vars are set."""
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "1")
+        monkeypatch.setenv("PABOTQUEUEINDEX", "2")
+
+        assert is_pabot_execution() is True
+
+
+class TestGetPabotId:
+    """Tests for get_pabot_id function."""
+
+    def test_returns_none_without_pabot_env_vars(self, monkeypatch):
+        """Test returns None when no Pabot env vars are set."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOTQUEUEINDEX", "PABOT_QUEUE_INDEX"]:
+            monkeypatch.delenv(var, raising=False)
+
+        assert get_pabot_id() is None
+
+    def test_returns_pabotqueueindex_first(self, monkeypatch):
+        """Test prefers PABOTQUEUEINDEX over other vars."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "5")
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "1")
+
+        assert get_pabot_id() == "5"
+
+    def test_returns_pabot_queue_index_underscore_second(self, monkeypatch):
+        """Test falls back to PABOT_QUEUE_INDEX if PABOTQUEUEINDEX not set."""
+        monkeypatch.delenv("PABOTQUEUEINDEX", raising=False)
+        monkeypatch.setenv("PABOT_QUEUE_INDEX", "7")
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "1")
+
+        assert get_pabot_id() == "7"
+
+    def test_returns_pabotexecutionpoolid_last(self, monkeypatch):
+        """Test falls back to PABOTEXECUTIONPOOLID if queue index not set."""
+        monkeypatch.delenv("PABOTQUEUEINDEX", raising=False)
+        monkeypatch.delenv("PABOT_QUEUE_INDEX", raising=False)
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "3")
+
+        assert get_pabot_id() == "3"
+
+    def test_returns_exact_string_value(self, monkeypatch):
+        """Test returns exact string value from env var."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "42")
+
+        assert get_pabot_id() == "42"
+
+
+class TestGetProcessIdentifier:
+    """Tests for get_process_identifier function."""
+
+    def test_returns_none_without_pabot(self, monkeypatch):
+        """Test returns None when not running under Pabot."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOTQUEUEINDEX", "PABOT_QUEUE_INDEX"]:
+            monkeypatch.delenv(var, raising=False)
+
+        assert get_process_identifier() is None
+
+    def test_returns_pabot_prefixed_id(self, monkeypatch):
+        """Test returns 'pabot' prefixed identifier."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "2")
+
+        assert get_process_identifier() == "pabot2"
+
+    def test_uses_queue_index_in_identifier(self, monkeypatch):
+        """Test uses queue index value in identifier."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "15")
+
+        assert get_process_identifier() == "pabot15"
+
+    def test_uses_pool_id_when_no_queue_index(self, monkeypatch):
+        """Test uses pool ID when queue index not available."""
+        monkeypatch.delenv("PABOTQUEUEINDEX", raising=False)
+        monkeypatch.delenv("PABOT_QUEUE_INDEX", raising=False)
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "0")
+
+        assert get_process_identifier() == "pabot0"
+
+
+class TestCreateTraceWithPabot:
+    """Tests for TraceWriter.create_trace with Pabot support."""
+
+    def test_create_trace_without_pabot_no_suffix(self, tmp_path, monkeypatch):
+        """Test create_trace without Pabot does not add suffix."""
+        for var in ["PABOTEXECUTIONPOOLID", "PABOTQUEUEINDEX", "PABOT_QUEUE_INDEX"]:
+            monkeypatch.delenv(var, raising=False)
+
+        writer = TraceWriter(str(tmp_path))
+        trace_dir = writer.create_trace("My Test")
+
+        # Should not contain 'pabot' in the name
+        assert "pabot" not in trace_dir.name
+
+    def test_create_trace_with_pabot_adds_suffix(self, tmp_path, monkeypatch):
+        """Test create_trace with Pabot adds process identifier suffix."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "3")
+
+        writer = TraceWriter(str(tmp_path))
+        trace_dir = writer.create_trace("My Test")
+
+        assert "pabot3" in trace_dir.name
+        assert trace_dir.name.endswith("_pabot3")
+
+    def test_create_trace_with_pabot_format(self, tmp_path, monkeypatch):
+        """Test trace directory name format with Pabot."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "1")
+
+        with patch("trace_viewer.storage.trace_writer.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2025, 1, 20, 14, 30, 22)
+            writer = TraceWriter(str(tmp_path))
+            trace_dir = writer.create_trace("Login Test")
+
+        # Expected format: login_test_20250120_143022_pabot1
+        assert trace_dir.name == "login_test_20250120_143022_pabot1"
+
+    def test_create_trace_pabot_different_processes_create_different_dirs(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that different Pabot processes create different directories."""
+        # Simulate process 1
+        monkeypatch.setenv("PABOTQUEUEINDEX", "1")
+        writer1 = TraceWriter(str(tmp_path))
+
+        with patch("trace_viewer.storage.trace_writer.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2025, 1, 20, 14, 30, 22)
+            trace_dir1 = writer1.create_trace("Test")
+
+        # Simulate process 2
+        monkeypatch.setenv("PABOTQUEUEINDEX", "2")
+        writer2 = TraceWriter(str(tmp_path))
+
+        with patch("trace_viewer.storage.trace_writer.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2025, 1, 20, 14, 30, 22)
+            trace_dir2 = writer2.create_trace("Test")
+
+        # Both directories should exist and be different
+        assert trace_dir1.exists()
+        assert trace_dir2.exists()
+        assert trace_dir1 != trace_dir2
+        assert trace_dir1.name == "test_20250120_143022_pabot1"
+        assert trace_dir2.name == "test_20250120_143022_pabot2"
+
+    def test_create_trace_pabot_dir_structure_correct(self, tmp_path, monkeypatch):
+        """Test that Pabot trace directory has correct structure."""
+        monkeypatch.setenv("PABOTQUEUEINDEX", "5")
+
+        writer = TraceWriter(str(tmp_path))
+        trace_dir = writer.create_trace("Test")
+
+        # Directory should exist with keywords subdirectory
+        assert trace_dir.exists()
+        assert (trace_dir / "keywords").exists()
+        assert trace_dir.is_dir()
+        assert (trace_dir / "keywords").is_dir()
+
+    def test_create_trace_with_pool_id_adds_suffix(self, tmp_path, monkeypatch):
+        """Test create_trace with PABOTEXECUTIONPOOLID adds suffix."""
+        monkeypatch.delenv("PABOTQUEUEINDEX", raising=False)
+        monkeypatch.delenv("PABOT_QUEUE_INDEX", raising=False)
+        monkeypatch.setenv("PABOTEXECUTIONPOOLID", "0")
+
+        writer = TraceWriter(str(tmp_path))
+        trace_dir = writer.create_trace("My Test")
+
+        assert "pabot0" in trace_dir.name

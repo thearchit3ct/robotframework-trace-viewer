@@ -19,6 +19,7 @@ from typing import Any, Literal
 from robot.api.interfaces import ListenerV3
 
 from trace_viewer.capture.console import ConsoleCapture
+from trace_viewer.capture.dom import DOMCapture
 from trace_viewer.capture.screenshot import ScreenshotCapture
 from trace_viewer.capture.variables import VariablesCapture
 from trace_viewer.storage.trace_writer import TraceWriter
@@ -161,6 +162,7 @@ class TraceListener(ListenerV3):
         self.screenshot_capture = ScreenshotCapture()
         self.variables_capture = VariablesCapture()
         self.console_capture = ConsoleCapture()
+        self.dom_capture = DOMCapture()
         self.viewer_generator: Any | None = None
         if _HAS_VIEWER_GENERATOR and ViewerGenerator is not None:
             self.viewer_generator = ViewerGenerator()
@@ -375,11 +377,24 @@ class TraceListener(ListenerV3):
                 logger.debug("Console logs capture failed: %s", e)
                 keyword_data["has_console_logs"] = False
                 keyword_data["console_logs_count"] = 0
+
+            # Capture DOM snapshot
+            try:
+                dom_html = self.dom_capture.capture()
+                if dom_html:
+                    self.trace_writer.write_dom_snapshot(keyword_dir, dom_html)
+                    keyword_data["has_dom"] = True
+                else:
+                    keyword_data["has_dom"] = False
+            except Exception as e:
+                logger.debug("DOM capture failed: %s", e)
+                keyword_data["has_dom"] = False
         else:
             keyword_data["has_screenshot"] = False
             keyword_data["has_variables"] = False
             keyword_data["has_console_logs"] = False
             keyword_data["console_logs_count"] = 0
+            keyword_data["has_dom"] = False
 
         # Save metadata.json in keyword folder using trace_writer
         self.trace_writer.write_keyword_metadata(keyword_dir, keyword_data)

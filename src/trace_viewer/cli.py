@@ -9,6 +9,7 @@ from typing import Any, Optional
 import click
 
 from trace_viewer import __version__
+from trace_viewer.viewer.comparator import TraceComparator
 
 
 @click.group()
@@ -240,6 +241,125 @@ def _create_trace_zip(trace_dir: Path, output_path: Path) -> None:
                 # Calculate relative path from trace directory
                 arcname = file_path.relative_to(trace_dir)
                 zf.write(file_path, arcname)
+
+
+@main.command()
+@click.argument("trace1_path", type=click.Path(exists=True))
+@click.argument("trace2_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Output HTML file path. Defaults to 'comparison.html' in current directory.",
+)
+@click.option(
+    "--open",
+    "-O",
+    "open_browser",
+    is_flag=True,
+    default=False,
+    help="Open the comparison in the default web browser after generation.",
+)
+def compare(trace1_path: str, trace2_path: str, output: Optional[str], open_browser: bool) -> None:
+    """Compare two traces and generate a side-by-side comparison report.
+
+    Compares two Robot Framework trace directories and generates an HTML
+    report showing differences in keywords, variables, and metadata.
+    Screenshots from both traces are displayed side by side.
+
+    Args:
+        trace1_path: Path to the first trace directory (left side).
+        trace2_path: Path to the second trace directory (right side).
+        output: Optional output path for the HTML file. If not specified,
+            creates 'comparison.html' in the current directory.
+        open_browser: If True, opens the comparison in the default browser.
+
+    Raises:
+        SystemExit: If either trace directory is invalid or comparison fails.
+
+    Examples:
+        trace-viewer compare ./traces/test_v1 ./traces/test_v2
+        trace-viewer compare ./trace1 ./trace2 --output /tmp/diff.html
+        trace-viewer compare ./trace1 ./trace2 -O  # Open in browser
+    """
+    trace1 = Path(trace1_path)
+    trace2 = Path(trace2_path)
+
+    # Validate trace directories
+    if not (trace1 / "manifest.json").exists():
+        click.echo(f"Error: No manifest.json found in {trace1_path}", err=True)
+        click.echo("This does not appear to be a valid trace directory.", err=True)
+        raise SystemExit(1)
+
+    if not (trace2 / "manifest.json").exists():
+        click.echo(f"Error: No manifest.json found in {trace2_path}", err=True)
+        click.echo("This does not appear to be a valid trace directory.", err=True)
+        raise SystemExit(1)
+
+    # Determine output path
+    if output is None:
+        output_path = Path.cwd() / "comparison.html"
+    else:
+        output_path = Path(output)
+        # Ensure .html extension
+        if output_path.suffix.lower() != ".html":
+            output_path = output_path.with_suffix(".html")
+
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        click.echo("Comparing traces:")
+        click.echo(f"  Trace 1: {trace1}")
+        click.echo(f"  Trace 2: {trace2}")
+
+        comparator = TraceComparator(trace1, trace2)
+        comparison_data = comparator.compare()
+
+        # Display summary
+        summary = comparison_data["summary"]
+        click.echo("\nComparison Summary:")
+        click.echo(f"  Total keywords: {summary['total_keywords']}")
+
+        matched = summary["matched"]
+        modified = summary["modified"]
+        added = summary["added"]
+        removed = summary["removed"]
+
+        click.echo(
+            f"  Matched: {click.style(str(matched), fg='green')}, "
+            f"Modified: {click.style(str(modified), fg='yellow')}, "
+            f"Added: {click.style(str(added), fg='blue')}, "
+            f"Removed: {click.style(str(removed), fg='red')}"
+        )
+
+        if summary["status_changes"] > 0:
+            click.echo(
+                f"  Status changes: {click.style(str(summary['status_changes']), fg='yellow')}"
+            )
+        if summary["variable_changes"] > 0:
+            click.echo(
+                f"  Variable changes: {click.style(str(summary['variable_changes']), fg='yellow')}"
+            )
+
+        # Generate HTML
+        comparator.generate_html(output_path)
+        click.echo(f"\nComparison report generated: {output_path}")
+
+        if open_browser:
+            click.echo("Opening in browser...")
+            webbrowser.open(f"file://{output_path.absolute()}")
+
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: Invalid JSON in trace data: {e}", err=True)
+        raise SystemExit(1) from None
+    except OSError as e:
+        click.echo(f"Error: Failed to generate comparison: {e}", err=True)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

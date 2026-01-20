@@ -244,6 +244,70 @@ API Test
 
 In the viewer, sensitive variables will display as `***MASKED***` while others show their full values.
 
+### Parallel Execution with Pabot
+
+The trace viewer fully supports parallel test execution with [Pabot](https://pabot.org/). When running tests in parallel, trace directories automatically include a process identifier to prevent conflicts between concurrent test executions.
+
+#### Running with Pabot
+
+```bash
+# Install Pabot
+pip install robotframework-pabot
+
+# Run tests in parallel with trace capture
+pabot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+```
+
+#### How it Works
+
+When running under Pabot, the trace viewer detects the parallel execution environment through Pabot's environment variables (`PABOTQUEUEINDEX`, `PABOTEXECUTIONPOOLID`, etc.) and appends a unique process identifier to each trace directory name:
+
+```
+traces/
+  login_test_20250120_143022_pabot0/    # From Pabot process 0
+    manifest.json
+    viewer.html
+    keywords/
+      ...
+  login_test_20250120_143022_pabot1/    # From Pabot process 1
+    manifest.json
+    viewer.html
+    keywords/
+      ...
+  checkout_test_20250120_143025_pabot0/  # Another test from process 0
+    ...
+```
+
+This ensures that:
+- No trace files are overwritten or corrupted by concurrent processes
+- Each parallel execution creates its own isolated trace directory
+- All traces can be safely collected and viewed after parallel execution completes
+
+#### Listing Parallel Traces
+
+Use the CLI to list all traces including those from parallel executions:
+
+```bash
+trace-viewer list ./traces
+```
+
+Output example with Pabot traces:
+```
+Found 4 trace(s):
+  [PASS] Login Test (pabot0)
+      Path: ./traces/login_test_20250120_143022_pabot0
+      Duration: 2500ms
+  [PASS] Login Test (pabot1)
+      Path: ./traces/login_test_20250120_143022_pabot1
+      Duration: 2600ms
+  [PASS] Checkout Test (pabot0)
+      Path: ./traces/checkout_test_20250120_143025_pabot0
+      Duration: 3200ms
+  [FAIL] Search Test (pabot1)
+      Path: ./traces/search_test_20250120_143028_pabot1
+      Duration: 1800ms
+```
+
 ### Integration with CI/CD
 
 Example GitHub Actions workflow:

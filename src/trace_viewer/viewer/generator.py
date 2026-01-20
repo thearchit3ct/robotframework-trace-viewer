@@ -137,6 +137,7 @@ class ViewerGenerator:
             "args": keyword.get("args", []),
             "variables": keyword.get("variables", {}),
             "console_logs": keyword.get("console_logs", []),
+            "dom": keyword.get("dom"),
             "level": keyword.get("level", 0),
             "parent": keyword.get("parent"),
             "message": keyword.get("message", ""),
@@ -167,6 +168,32 @@ class ViewerGenerator:
                 processed["screenshot"] = None
         else:
             processed["screenshot"] = None
+
+        # Handle DOM path
+        dom = keyword.get("dom")
+        if dom:
+            # Convert to relative path if it's absolute
+            dom_path = Path(dom)
+            if dom_path.is_absolute():
+                try:
+                    # Make relative to trace_dir
+                    processed["dom"] = str(dom_path.relative_to(trace_dir))
+                except ValueError:
+                    # Path is not relative to trace_dir, use as-is
+                    processed["dom"] = dom
+            else:
+                # Already relative, use as-is
+                processed["dom"] = dom
+        elif keyword.get("has_dom") and keyword.get("folder"):
+            # Build DOM path from folder if has_dom is True
+            dom_rel_path = f"keywords/{keyword['folder']}/dom.html"
+            dom_abs_path = trace_dir / dom_rel_path
+            if dom_abs_path.exists():
+                processed["dom"] = dom_rel_path
+            else:
+                processed["dom"] = None
+        else:
+            processed["dom"] = None
 
         return processed
 
@@ -284,5 +311,13 @@ class ViewerGenerator:
             keyword["screenshot"] = f"keywords/{kw_dir.name}/screenshot.png"
         else:
             keyword["screenshot"] = None
+
+        # Check for DOM snapshot
+        dom_path = kw_dir / "dom.html"
+        if dom_path.exists():
+            # Use relative path from trace_dir
+            keyword["dom"] = f"keywords/{kw_dir.name}/dom.html"
+        else:
+            keyword["dom"] = None
 
         return keyword if keyword else None

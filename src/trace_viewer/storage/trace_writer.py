@@ -3,13 +3,101 @@
 This module provides the TraceWriter class which manages the structured
 storage of Robot Framework trace data including manifests, keyword metadata,
 variables, and screenshots.
+
+Supports parallel execution with Pabot by including process identifiers
+in trace directory names to avoid conflicts.
 """
 
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+
+def is_pabot_execution() -> bool:
+    """Detect if the current execution is running under Pabot.
+
+    Checks for Pabot-specific environment variables that are set during
+    parallel test execution.
+
+    Returns:
+        True if running under Pabot, False otherwise.
+
+    Example:
+        >>> # When running under Pabot:
+        >>> is_pabot_execution()
+        True
+        >>> # When running standalone:
+        >>> is_pabot_execution()
+        False
+    """
+    return (
+        os.environ.get("PABOTEXECUTIONPOOLID") is not None
+        or os.environ.get("PABOTQUEUEINDEX") is not None
+        or os.environ.get("PABOT_QUEUE_INDEX") is not None
+        or os.environ.get("PABOTLIBRARYSCOPE") is not None
+    )
+
+
+def get_pabot_id() -> Optional[str]:
+    """Get the Pabot execution identifier for the current process.
+
+    Returns the most specific Pabot identifier available, preferring
+    PABOTQUEUEINDEX over PABOTEXECUTIONPOOLID.
+
+    Returns:
+        The Pabot identifier string (e.g., "1", "2"), or None if not
+        running under Pabot.
+
+    Example:
+        >>> # When PABOTQUEUEINDEX=3
+        >>> get_pabot_id()
+        '3'
+        >>> # When not running under Pabot:
+        >>> get_pabot_id()
+        None
+    """
+    # Try different Pabot environment variables in order of preference
+    pabot_id = os.environ.get("PABOTQUEUEINDEX")
+    if pabot_id is not None:
+        return pabot_id
+
+    pabot_id = os.environ.get("PABOT_QUEUE_INDEX")
+    if pabot_id is not None:
+        return pabot_id
+
+    pabot_id = os.environ.get("PABOTEXECUTIONPOOLID")
+    if pabot_id is not None:
+        return pabot_id
+
+    return None
+
+
+def get_process_identifier() -> Optional[str]:
+    """Get a unique process identifier for parallel execution safety.
+
+    When running under Pabot, returns the Pabot-specific identifier.
+    This identifier can be used to create unique trace directory names
+    that avoid conflicts during parallel test execution.
+
+    Returns:
+        A unique process identifier string if running in parallel mode,
+        None if running in standard sequential mode.
+
+    Example:
+        >>> # When running under Pabot with PABOTQUEUEINDEX=2:
+        >>> get_process_identifier()
+        'pabot2'
+        >>> # When running standalone:
+        >>> get_process_identifier()
+        None
+    """
+    pabot_id = get_pabot_id()
+    if pabot_id is not None:
+        return f"pabot{pabot_id}"
+    return None
 
 
 class TraceWriter:
@@ -92,6 +180,10 @@ class TraceWriter:
         associated with a single test execution. Also creates the
         keywords subdirectory.
 
+        When running under Pabot (parallel execution), the directory name
+        includes a process identifier to avoid conflicts between parallel
+        test executions.
+
         Args:
             test_name: Name of the test being traced.
 
@@ -102,10 +194,15 @@ class TraceWriter:
             >>> writer = TraceWriter("./traces")
             >>> path = writer.create_trace("Login Test")
             >>> path.name  # e.g., 'login_test_20250119_143022'
+            >>> # Under Pabot: 'login_test_20250119_143022_pabot1'
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         slug = self.slugify(test_name)
-        trace_name = f"{slug}_{timestamp}"
+
+        # Include process identifier for Pabot parallel execution
+        process_id = get_process_identifier()
+        trace_name = f"{slug}_{timestamp}_{process_id}" if process_id else f"{slug}_{timestamp}"
+
         self._current_trace_dir = self.base_dir / trace_name
         self._current_trace_dir.mkdir(parents=True, exist_ok=True)
         (self._current_trace_dir / "keywords").mkdir(exist_ok=True)
@@ -232,6 +329,23 @@ class TraceWriter:
         console_path = keyword_dir / "console.json"
         self._write_json_atomic(console_path, {"logs": logs})
         return console_path
+
+    def write_dom_snapshot(self, keyword_dir: Path, html: str) -> Path:
+        """Write dom.html for a keyword.
+
+        Contains the sanitized DOM snapshot captured during keyword execution.
+        Script tags are removed from the HTML for security before writing.
+
+        Args:
+            keyword_dir: Path to the keyword directory.
+            html: The sanitized HTML content of the DOM snapshot.
+
+        Returns:
+            Path to the written DOM snapshot file.
+        """
+        dom_path = keyword_dir / "dom.html"
+        dom_path.write_text(html, encoding="utf-8")
+        return dom_path
 
     def _write_json_atomic(self, path: Path, data: dict[str, Any]) -> None:
         """Write JSON atomically using write-to-tmp-then-rename pattern.

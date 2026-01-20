@@ -264,6 +264,104 @@
             opacity: 0.5;
         }
 
+        /* View mode tabs */
+        .view-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            background: var(--bg-tertiary);
+            padding: 4px;
+            border-radius: 8px;
+            width: fit-content;
+        }
+
+        .view-tab {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .view-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+
+        .view-tab.active {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .view-tab:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .view-tab:disabled:hover {
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        /* Main content wrapper for tabs + content */
+        .main-wrapper {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+        }
+
+        .main-view-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            overflow: auto;
+        }
+
+        /* DOM viewer iframe container */
+        .dom-container {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            max-height: calc(100vh - var(--header-height) - var(--footer-height) - 100px);
+        }
+
+        .dom-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+
+        .no-dom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .no-dom-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
         /* Footer panel */
         .footer {
             grid-column: 1 / -1;
@@ -593,6 +691,7 @@
 
             // State
             let selectedKeywordIndex = null;
+            let currentViewMode = 'screenshot'; // 'screenshot' or 'dom'
 
             // DOM Elements
             const elements = {
@@ -692,7 +791,8 @@
                     </div>
                     <div class="keyword-meta keyword-level">
                         <span>${formatDuration(keyword.duration_ms || 0)}</span>
-                        ${keyword.screenshot ? '<span>&#128247;</span>' : ''}
+                        ${keyword.screenshot ? '<span title="Screenshot">&#128247;</span>' : ''}
+                        ${keyword.dom ? '<span title="DOM snapshot">&#128196;</span>' : ''}
                     </div>
                 `;
 
@@ -747,19 +847,74 @@
 
                 // Display keyword details
                 const keyword = keywords[index];
-                displayScreenshot(keyword);
+                displayMainContent(keyword);
                 displayMetadata(keyword);
                 displayVariables(keyword);
                 displayConsoleLogs(keyword);
             }
 
             /**
-             * Display screenshot for a keyword
+             * Display main content (screenshot or DOM) based on current view mode
              * @param {Object} keyword - Keyword data
              */
-            function displayScreenshot(keyword) {
+            function displayMainContent(keyword) {
+                const hasScreenshot = !!keyword.screenshot;
+                const hasDom = !!keyword.dom;
+
+                // Create view tabs HTML
+                const tabsHtml = `
+                    <div class="view-tabs">
+                        <button class="view-tab ${currentViewMode === 'screenshot' ? 'active' : ''}"
+                                data-view="screenshot"
+                                ${!hasScreenshot ? 'disabled' : ''}>
+                            Screenshot
+                        </button>
+                        <button class="view-tab ${currentViewMode === 'dom' ? 'active' : ''}"
+                                data-view="dom"
+                                ${!hasDom ? 'disabled' : ''}>
+                            DOM
+                        </button>
+                    </div>
+                `;
+
+                // Determine which content to show
+                let contentHtml = '';
+                if (currentViewMode === 'screenshot') {
+                    contentHtml = getScreenshotHtml(keyword);
+                } else {
+                    contentHtml = getDomHtml(keyword);
+                }
+
+                elements.mainContent.innerHTML = `
+                    <div class="main-wrapper">
+                        ${tabsHtml}
+                        <div class="main-view-content">
+                            ${contentHtml}
+                        </div>
+                    </div>
+                `;
+
+                // Add event listeners to tabs
+                const tabs = elements.mainContent.querySelectorAll('.view-tab');
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        const view = e.target.dataset.view;
+                        if (view && !e.target.disabled) {
+                            currentViewMode = view;
+                            displayMainContent(keyword);
+                        }
+                    });
+                });
+            }
+
+            /**
+             * Get screenshot HTML
+             * @param {Object} keyword - Keyword data
+             * @returns {string} HTML string
+             */
+            function getScreenshotHtml(keyword) {
                 if (keyword.screenshot) {
-                    elements.mainContent.innerHTML = `
+                    return `
                         <div class="screenshot-container">
                             <img src="${escapeHtml(keyword.screenshot)}"
                                  alt="Screenshot for ${escapeHtml(keyword.name)}"
@@ -768,10 +923,35 @@
                         </div>
                     `;
                 } else {
-                    elements.mainContent.innerHTML = `
+                    return `
                         <div class="no-screenshot">
                             <div class="no-screenshot-icon">&#128247;</div>
                             <p>No screenshot captured for this keyword</p>
+                        </div>
+                    `;
+                }
+            }
+
+            /**
+             * Get DOM viewer HTML
+             * @param {Object} keyword - Keyword data
+             * @returns {string} HTML string
+             */
+            function getDomHtml(keyword) {
+                if (keyword.dom) {
+                    return `
+                        <div class="dom-container">
+                            <iframe src="${escapeHtml(keyword.dom)}"
+                                    sandbox="allow-same-origin"
+                                    title="DOM snapshot for ${escapeHtml(keyword.name)}">
+                            </iframe>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="no-dom">
+                            <div class="no-dom-icon">&#128196;</div>
+                            <p>No DOM snapshot captured for this keyword</p>
                         </div>
                     `;
                 }
