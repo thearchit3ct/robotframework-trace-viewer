@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.webp" alt="Robot Framework Trace Viewer" width="200">
+  <img src="https://raw.githubusercontent.com/thearchit3ct/robotframework-trace-viewer/main/docs/images/logo.webp" alt="Robot Framework Trace Viewer" width="200">
 </p>
 
 <h1 align="center">Robot Framework Trace Viewer</h1>
