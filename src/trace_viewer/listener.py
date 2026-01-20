@@ -193,7 +193,7 @@ class TraceListener(ListenerV3):
 
         self.trace_data = {
             "version": "1.0.0",
-            "tool_version": "0.1.0",
+            "tool_version": "0.1.1",
             "suite_name": self.suite_name,
             "suite_source": self.suite_source,
             "capture_mode": self.capture_mode,
@@ -400,7 +400,7 @@ class TraceListener(ListenerV3):
         # Build manifest
         manifest = {
             "version": "1.0.0",
-            "tool_version": "0.1.0",
+            "tool_version": "0.1.1",
             "test_name": self.current_test["name"],
             "test_longname": self.current_test["longname"],
             "suite_name": self.suite_name,
@@ -418,6 +418,18 @@ class TraceListener(ListenerV3):
 
         # Save manifest.json using trace_writer
         self.trace_writer.write_manifest(manifest)
+
+        # Generate viewer.html for this test
+        if self.viewer_generator is not None:
+            try:
+                # Prepare viewer data with keywords
+                viewer_data = {
+                    **manifest,
+                    "keywords": self.current_test["keywords"],
+                }
+                self.viewer_generator.generate(self.current_test_dir, viewer_data)
+            except Exception as e:
+                logger.warning("Viewer generation failed for test %s: %s", manifest["test_name"], e)
 
         # Add test reference to trace_data
         self.trace_data["tests"].append(
@@ -437,15 +449,11 @@ class TraceListener(ListenerV3):
     def end_suite(self, data: Any, result: Any) -> None:
         """Called when a test suite finishes.
 
-        Generates the viewer HTML if ViewerGenerator is available.
+        Currently a no-op, but can be extended for suite-level summary generation.
 
         Args:
             data: Suite execution data.
             result: Suite result object.
         """
-        # Generate viewer if ViewerGenerator is available
-        if self.viewer_generator is not None:
-            try:
-                self.viewer_generator.generate(self.output_dir, self.trace_data)
-            except Exception as e:
-                logger.warning("Viewer generation failed: %s", e)
+        # Viewer generation is now done per-test in end_test
+        pass

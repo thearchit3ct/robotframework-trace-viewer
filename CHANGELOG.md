@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-01-20
+
+### Fixed
+- Viewer HTML is now generated per-test in `end_test` instead of `end_suite`
+- Each test trace now includes its own `viewer.html` file
+
 ## [0.1.0] - 2025-01-20
 
 ### Added
@@ -46,5 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Robot Framework 6.0+, 7.0+
 - SeleniumLibrary 6.0+
 
-[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/thearchit3ct/robotframework-trace-viewer/releases/tag/v0.1.0
