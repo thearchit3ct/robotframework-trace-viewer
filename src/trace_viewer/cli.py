@@ -362,5 +362,87 @@ def compare(trace1_path: str, trace2_path: str, output: Optional[str], open_brow
         raise SystemExit(1) from None
 
 
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Output HTML file path. Defaults to 'dashboard.html' in traces directory.",
+)
+@click.option(
+    "--open",
+    "-O",
+    "open_browser",
+    is_flag=True,
+    default=False,
+    help="Open the dashboard in the default web browser after generation.",
+)
+def stats(traces_dir: str, output: Optional[str], open_browser: bool) -> None:
+    """Generate a statistics dashboard from multiple traces.
+
+    Scans a traces directory and generates an HTML dashboard with aggregate
+    statistics including pass/fail rates, test durations, flaky tests, and
+    keyword usage.
+
+    Args:
+        traces_dir: Path to the directory containing trace folders.
+            Defaults to './traces'.
+        output: Optional output path for the HTML file. If not specified,
+            creates 'dashboard.html' in the traces directory.
+        open_browser: If True, opens the dashboard in the default browser.
+
+    Raises:
+        SystemExit: If the traces directory is invalid or dashboard generation fails.
+
+    Examples:
+        trace-viewer stats ./traces
+        trace-viewer stats ./traces --output /tmp/dashboard.html
+        trace-viewer stats ./traces -O  # Open in browser
+    """
+    from trace_viewer.stats.dashboard import StatsDashboard
+
+    traces_path = Path(traces_dir)
+
+    try:
+        click.echo(f"Scanning traces in: {traces_path}")
+
+        dashboard = StatsDashboard(traces_path)
+        stats_data = dashboard.calculate_statistics()
+
+        # Display summary
+        summary = stats_data["summary"]
+        click.echo(f"\nFound {summary['total']} trace(s):")
+        click.echo(
+            f"  {click.style(str(summary['passed']), fg='green')} passed, "
+            f"{click.style(str(summary['failed']), fg='red')} failed, "
+            f"{click.style(str(summary['skipped']), fg='yellow')} skipped"
+        )
+        click.echo(f"  Pass rate: {summary['pass_rate']}%")
+
+        # Generate dashboard
+        if output is None:
+            output_path = traces_path / "dashboard.html"
+        else:
+            output_path = Path(output)
+            if output_path.suffix.lower() != ".html":
+                output_path = output_path.with_suffix(".html")
+
+        dashboard.generate_html(output_path)
+        click.echo(f"\nDashboard generated: {output_path}")
+
+        if open_browser:
+            click.echo("Opening in browser...")
+            webbrowser.open(f"file://{output_path.absolute()}")
+
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+    except OSError as e:
+        click.echo(f"Error: Failed to generate dashboard: {e}", err=True)
+        raise SystemExit(1) from None
+
+
 if __name__ == "__main__":
     main()
