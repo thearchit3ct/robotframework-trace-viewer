@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-20
+
+### Added
+
+#### Core Capture Features
+- **DOM Capture**: Capture sanitized HTML snapshots of page state at each keyword
+  - Automatic script tag removal for security
+  - Inline style preservation
+  - Compact HTML output
+- **Console Logs Capture**: Record browser console output
+  - Captures log, warn, and error levels
+  - Includes source and timestamp
+  - Works with SeleniumLibrary's `get_log('browser')`
+- **Network Request Capture**: Record HTTP requests/responses via Chrome DevTools Protocol
+  - Request URL, method, headers
+  - Response status, headers, size
+  - Timing and duration metrics
+  - Supports Chrome, Chromium, Edge browsers
+
+#### Browser Support
+- **Browser Library Support**: Full integration with Playwright-based Browser Library
+  - Screenshot capture via `Take Screenshot`
+  - Page content capture via `Get Page Source`
+  - Automatic browser detection
+
+#### Analysis Tools
+- **Trace Comparison**: Compare two traces to identify differences
+  - Keyword alignment with match/modified/added/removed states
+  - Variable diff highlighting
+  - HTML comparison report generation
+  - CLI command: `trace-viewer compare <trace1> <trace2>`
+- **Statistics Dashboard**: Generate aggregated statistics across traces
+  - Pass/fail rates and trends
+  - Duration statistics (min, max, avg, median, p95)
+  - Slowest tests identification
+  - Flaky test detection
+  - HTML dashboard with charts
+  - CLI command: `trace-viewer stats <traces_dir>`
+- **ZIP Export**: Export traces as portable archives
+  - Includes viewer and all captured data
+  - CLI command: `trace-viewer export <trace> -o archive.zip`
+
+#### Integrations
+- **ReportPortal Integration**: Upload traces to ReportPortal
+  - Launch/Test/Step hierarchy mapping
+  - Screenshot attachments
+  - Attribute and tag support
+  - Environment variable configuration
+  - CLI command: `trace-viewer export-rp`
+- **Pabot Support**: Full parallel execution support
+  - Automatic worker ID detection via environment variables
+  - Unique trace directory naming (`_pabot0`, `_pabot1`, etc.)
+  - No trace file conflicts in parallel runs
+
+#### Viewer Enhancements
+- **Network Panel**: Display captured network requests in viewer
+  - Request method, URL, status
+  - Response size and duration
+  - Expandable request/response details
+- **Console Panel**: Display browser console logs in viewer
+  - Color-coded log levels
+  - Timestamp display
+
+### Changed
+- Viewer HTML now includes four panels: Screenshot, Variables, Console, Network
+- Trace directory structure now includes `dom.html`, `console.json`, `network.json`
+
+### Fixed
+- mypy type errors in comparator.py with proper cast usage
+- mypy type errors in stats dashboard with type: ignore comments
+
 ## [0.1.3] - 2025-01-20
 
 ### Fixed
@@ -63,7 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Robot Framework 6.0+, 7.0+
 - SeleniumLibrary 6.0+
 
-[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.0...v0.1.1
