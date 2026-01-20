@@ -193,7 +193,7 @@ class TraceListener(ListenerV3):
 
         self.trace_data = {
             "version": "1.0.0",
-            "tool_version": "0.1.1",
+            "tool_version": "0.1.2",
             "suite_name": self.suite_name,
             "suite_source": self.suite_source,
             "capture_mode": self.capture_mode,
@@ -400,7 +400,7 @@ class TraceListener(ListenerV3):
         # Build manifest
         manifest = {
             "version": "1.0.0",
-            "tool_version": "0.1.1",
+            "tool_version": "0.1.2",
             "test_name": self.current_test["name"],
             "test_longname": self.current_test["longname"],
             "suite_name": self.suite_name,

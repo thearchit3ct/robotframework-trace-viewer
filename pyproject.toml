@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "robotframework-trace-viewer"
-version = "0.1.1"
+version = "0.1.2"
 description = "Visual trace viewer for Robot Framework test debugging"
 readme = "README.md"
 license = "MIT"

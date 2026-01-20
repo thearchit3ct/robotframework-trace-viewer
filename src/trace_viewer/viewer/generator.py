@@ -156,6 +156,14 @@ class ViewerGenerator:
             else:
                 # Already relative, use as-is
                 processed["screenshot"] = screenshot
+        elif keyword.get("has_screenshot") and keyword.get("folder"):
+            # Build screenshot path from folder if has_screenshot is True
+            screenshot_rel_path = f"keywords/{keyword['folder']}/screenshot.png"
+            screenshot_abs_path = trace_dir / screenshot_rel_path
+            if screenshot_abs_path.exists():
+                processed["screenshot"] = screenshot_rel_path
+            else:
+                processed["screenshot"] = None
         else:
             processed["screenshot"] = None
 
