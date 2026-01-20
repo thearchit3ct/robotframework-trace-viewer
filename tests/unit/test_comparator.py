@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -23,7 +23,7 @@ def create_trace(
     test_name: str = "Test Name",
     status: str = "PASS",
     duration_ms: int = 1000,
-    keywords: list[dict[str, Any]] | None = None,
+    keywords: Optional[list[dict[str, Any]]] = None,
 ) -> Path:
     """Helper function to create a trace directory with manifest and keywords.
 
