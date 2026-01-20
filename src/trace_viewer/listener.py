@@ -20,6 +20,7 @@ from robot.api.interfaces import ListenerV3
 
 from trace_viewer.capture.console import ConsoleCapture
 from trace_viewer.capture.dom import DOMCapture
+from trace_viewer.capture.network import NetworkCapture
 from trace_viewer.capture.screenshot import ScreenshotCapture
 from trace_viewer.capture.variables import VariablesCapture
 from trace_viewer.storage.trace_writer import TraceWriter
@@ -163,6 +164,7 @@ class TraceListener(ListenerV3):
         self.variables_capture = VariablesCapture()
         self.console_capture = ConsoleCapture()
         self.dom_capture = DOMCapture()
+        self.network_capture = NetworkCapture()
         self.viewer_generator: Any | None = None
         if _HAS_VIEWER_GENERATOR and ViewerGenerator is not None:
             self.viewer_generator = ViewerGenerator()
@@ -235,6 +237,9 @@ class TraceListener(ListenerV3):
         # Reset keyword tracking
         self.keyword_index = 0
         self.keyword_stack = []
+
+        # Enable network capture for the test
+        self.network_capture.enable()
 
     def start_keyword(self, data: Any, result: Any) -> None:
         """Called when a keyword starts execution.
@@ -389,12 +394,29 @@ class TraceListener(ListenerV3):
             except Exception as e:
                 logger.debug("DOM capture failed: %s", e)
                 keyword_data["has_dom"] = False
+
+            # Capture network requests
+            try:
+                network_requests = self.network_capture.capture()
+                if network_requests:
+                    self.trace_writer.write_network_requests(keyword_dir, network_requests)
+                    keyword_data["has_network"] = True
+                    keyword_data["network_requests_count"] = len(network_requests)
+                else:
+                    keyword_data["has_network"] = False
+                    keyword_data["network_requests_count"] = 0
+            except Exception as e:
+                logger.debug("Network capture failed: %s", e)
+                keyword_data["has_network"] = False
+                keyword_data["network_requests_count"] = 0
         else:
             keyword_data["has_screenshot"] = False
             keyword_data["has_variables"] = False
             keyword_data["has_console_logs"] = False
             keyword_data["console_logs_count"] = 0
             keyword_data["has_dom"] = False
+            keyword_data["has_network"] = False
+            keyword_data["network_requests_count"] = 0
 
         # Save metadata.json in keyword folder using trace_writer
         self.trace_writer.write_keyword_metadata(keyword_dir, keyword_data)
@@ -473,6 +495,9 @@ class TraceListener(ListenerV3):
                 "status": self.current_test["status"],
             }
         )
+
+        # Disable network capture
+        self.network_capture.disable()
 
         # Reset test state
         self.current_test = {}

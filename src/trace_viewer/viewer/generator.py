@@ -195,6 +195,28 @@ class ViewerGenerator:
         else:
             processed["dom"] = None
 
+        # Handle network requests
+        network_requests = keyword.get("network_requests", [])
+        if network_requests:
+            processed["network_requests"] = network_requests
+        elif keyword.get("has_network") and keyword.get("folder"):
+            # Load network requests from file if has_network is True
+            network_rel_path = f"keywords/{keyword['folder']}/network.json"
+            network_abs_path = trace_dir / network_rel_path
+            if network_abs_path.exists():
+                try:
+                    import json
+
+                    with open(network_abs_path, encoding="utf-8") as f:
+                        network_data = json.load(f)
+                    processed["network_requests"] = network_data.get("requests", [])
+                except (OSError, json.JSONDecodeError):
+                    processed["network_requests"] = []
+            else:
+                processed["network_requests"] = []
+        else:
+            processed["network_requests"] = []
+
         return processed
 
     def generate_from_manifest(self, trace_dir: Path) -> Path:
@@ -319,5 +341,17 @@ class ViewerGenerator:
             keyword["dom"] = f"keywords/{kw_dir.name}/dom.html"
         else:
             keyword["dom"] = None
+
+        # Load network requests
+        network_path = kw_dir / "network.json"
+        if network_path.exists():
+            try:
+                with open(network_path, encoding="utf-8") as f:
+                    network_data = json.load(f)
+                    keyword["network_requests"] = network_data.get("requests", [])
+            except json.JSONDecodeError:
+                keyword["network_requests"] = []
+        else:
+            keyword["network_requests"] = []
 
         return keyword if keyword else None

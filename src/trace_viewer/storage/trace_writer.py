@@ -347,6 +347,25 @@ class TraceWriter:
         dom_path.write_text(html, encoding="utf-8")
         return dom_path
 
+    def write_network_requests(
+        self, keyword_dir: Path, requests: list[dict[str, Any]]
+    ) -> Path:
+        """Write network.json for a keyword.
+
+        Contains network requests captured during keyword execution via CDP.
+        Each request entry includes URL, method, status, headers, and timing.
+
+        Args:
+            keyword_dir: Path to the keyword directory.
+            requests: List of network request entries.
+
+        Returns:
+            Path to the written network file.
+        """
+        network_path = keyword_dir / "network.json"
+        self._write_json_atomic(network_path, {"requests": requests})
+        return network_path
+
     def _write_json_atomic(self, path: Path, data: dict[str, Any]) -> None:
         """Write JSON atomically using write-to-tmp-then-rename pattern.
 

@@ -368,7 +368,7 @@
             background: var(--bg-primary);
             border-top: 1px solid var(--border-color);
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             overflow: hidden;
         }
 
@@ -556,6 +556,121 @@
             font-size: 0.875rem;
         }
 
+        /* Network requests panel */
+        .network-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .network-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8125rem;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+        }
+
+        .network-item.error {
+            background-color: #fee2e2;
+            border-left: 3px solid var(--color-fail);
+        }
+
+        .network-item.redirect {
+            background-color: #fef9c3;
+            border-left: 3px solid var(--color-skip);
+        }
+
+        .network-item.success {
+            background-color: #dcfce7;
+            border-left: 3px solid var(--color-pass);
+        }
+
+        .network-method {
+            font-weight: 600;
+            font-size: 0.6875rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            flex-shrink: 0;
+            background: var(--text-secondary);
+            color: white;
+        }
+
+        .network-method.get {
+            background: #0ea5e9;
+        }
+
+        .network-method.post {
+            background: #22c55e;
+        }
+
+        .network-method.put {
+            background: #f59e0b;
+        }
+
+        .network-method.delete {
+            background: #ef4444;
+        }
+
+        .network-status {
+            font-weight: 600;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .network-status.success {
+            color: var(--color-pass);
+        }
+
+        .network-status.error {
+            color: var(--color-fail);
+        }
+
+        .network-status.redirect {
+            color: var(--color-skip);
+        }
+
+        .network-url {
+            flex: 1;
+            word-break: break-all;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .network-duration {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .network-size {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .network-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .no-network {
+            color: var(--text-secondary);
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
         /* Keyboard hints */
         .keyboard-hints {
             position: fixed;
@@ -669,6 +784,12 @@
                     <p class="no-console-logs">No console logs captured</p>
                 </div>
             </div>
+            <div class="panel">
+                <h2 class="panel-title">Network <span class="network-count" id="network-count"></span></h2>
+                <div class="network-list" id="network-panel">
+                    <p class="no-network">No network requests captured</p>
+                </div>
+            </div>
         </footer>
     </div>
 
@@ -705,7 +826,9 @@
                 metadataPanel: document.getElementById('metadata-panel'),
                 variablesPanel: document.getElementById('variables-panel'),
                 consolePanel: document.getElementById('console-panel'),
-                consoleCount: document.getElementById('console-count')
+                consoleCount: document.getElementById('console-count'),
+                networkPanel: document.getElementById('network-panel'),
+                networkCount: document.getElementById('network-count')
             };
 
             /**
@@ -851,6 +974,7 @@
                 displayMetadata(keyword);
                 displayVariables(keyword);
                 displayConsoleLogs(keyword);
+                displayNetworkRequests(keyword);
             }
 
             /**
@@ -1076,6 +1200,60 @@
                 }).join('');
 
                 elements.consolePanel.innerHTML = html;
+            }
+
+            /**
+             * Display network requests for a keyword
+             * @param {Object} keyword - Keyword data
+             */
+            function displayNetworkRequests(keyword) {
+                const requests = keyword.network_requests || [];
+
+                // Update count display
+                if (requests.length > 0) {
+                    elements.networkCount.textContent = `(${requests.length})`;
+                } else {
+                    elements.networkCount.textContent = '';
+                }
+
+                if (requests.length === 0) {
+                    elements.networkPanel.innerHTML = '<p class="no-network">No network requests captured</p>';
+                    return;
+                }
+
+                const html = requests.map(req => {
+                    const method = (req.method || 'GET').toUpperCase();
+                    const methodClass = method.toLowerCase();
+                    const status = req.status || 0;
+                    const statusClass = status >= 400 ? 'error' : (status >= 300 ? 'redirect' : 'success');
+                    const itemClass = status === 0 ? 'error' : (status >= 400 ? 'error' : (status >= 300 ? 'redirect' : 'success'));
+                    const url = escapeHtml(req.url || '');
+                    const duration = req.duration_ms ? `${req.duration_ms}ms` : '';
+                    const size = req.size ? formatBytes(req.size) : '';
+
+                    return `
+                        <div class="network-item ${itemClass}">
+                            <span class="network-method ${methodClass}">${method}</span>
+                            <span class="network-status ${statusClass}">${status || 'ERR'}</span>
+                            <span class="network-url" title="${url}">${url}</span>
+                            ${duration ? `<span class="network-duration">${duration}</span>` : ''}
+                            ${size ? `<span class="network-size">${size}</span>` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+                elements.networkPanel.innerHTML = html;
+            }
+
+            /**
+             * Format bytes to human readable string
+             * @param {number} bytes - Bytes to format
+             * @returns {string} Formatted string
+             */
+            function formatBytes(bytes) {
+                if (bytes < 1024) return `${bytes}B`;
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+                return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
             }
 
             /**
