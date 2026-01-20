@@ -94,9 +94,9 @@ class StatsDashboard:
 
         duration_stats = {
             "total_ms": sum(durations),
-            "average_ms": int(sum(valid_durations) / len(valid_durations))
-            if valid_durations
-            else 0,
+            "average_ms": (
+                int(sum(valid_durations) / len(valid_durations)) if valid_durations else 0
+            ),
             "min_ms": min(valid_durations) if valid_durations else 0,
             "max_ms": max(valid_durations) if valid_durations else 0,
         }
@@ -222,16 +222,12 @@ class StatsDashboard:
             by_name[name] = {
                 "count": count,
                 "failures": keyword_failures[name],
-                "avg_duration_ms": int(sum(durations) / len(durations))
-                if durations
-                else 0,
+                "avg_duration_ms": int(sum(durations) / len(durations)) if durations else 0,
                 "total_duration_ms": sum(durations),
             }
 
         # Sort by count descending, take top 20
-        top_keywords = dict(
-            sorted(by_name.items(), key=lambda x: x[1]["count"], reverse=True)[:20]
-        )
+        top_keywords = dict(sorted(by_name.items(), key=lambda x: x[1]["count"], reverse=True)[:20])
 
         return {
             "total": total_keywords,
@@ -282,9 +278,7 @@ class StatsDashboard:
 
             # Calculate flakiness (if both passed and failed)
             is_flaky = passed > 0 and failed > 0
-            flakiness_score = (
-                min(passed, failed) / total * 100 if is_flaky and total > 0 else 0
-            )
+            flakiness_score = min(passed, failed) / total * 100 if is_flaky and total > 0 else 0
 
             stats.append(
                 {
@@ -293,9 +287,7 @@ class StatsDashboard:
                     "passed": passed,
                     "failed": failed,
                     "pass_rate": round(passed / total * 100, 1) if total > 0 else 0,
-                    "avg_duration_ms": int(sum(durations) / len(durations))
-                    if durations
-                    else 0,
+                    "avg_duration_ms": int(sum(durations) / len(durations)) if durations else 0,
                     "is_flaky": is_flaky,
                     "flakiness_score": round(flakiness_score, 1),
                 }

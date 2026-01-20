@@ -524,7 +524,7 @@ def export_rp(
     traces_path = Path(traces_dir)
 
     try:
-        click.echo(f"Exporting traces to ReportPortal...")
+        click.echo("Exporting traces to ReportPortal...")
         click.echo(f"  Endpoint: {endpoint}")
         click.echo(f"  Project: {project}")
         click.echo(f"  Traces: {traces_path}")
@@ -542,15 +542,11 @@ def export_rp(
         )
 
         # Display results
-        click.echo(f"\nExport complete:")
+        click.echo("\nExport complete:")
         click.echo(f"  Total traces: {results['total']}")
-        click.echo(
-            f"  Exported: {click.style(str(results['exported']), fg='green')}"
-        )
+        click.echo(f"  Exported: {click.style(str(results['exported']), fg='green')}")
         if results["failed"] > 0:
-            click.echo(
-                f"  Failed: {click.style(str(results['failed']), fg='red')}"
-            )
+            click.echo(f"  Failed: {click.style(str(results['failed']), fg='red')}")
             for error in results.get("errors", []):
                 click.echo(f"    - {error['trace']}: {error['error']}", err=True)
 

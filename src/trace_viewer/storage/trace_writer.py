@@ -347,9 +347,7 @@ class TraceWriter:
         dom_path.write_text(html, encoding="utf-8")
         return dom_path
 
-    def write_network_requests(
-        self, keyword_dir: Path, requests: list[dict[str, Any]]
-    ) -> Path:
+    def write_network_requests(self, keyword_dir: Path, requests: list[dict[str, Any]]) -> Path:
         """Write network.json for a keyword.
 
         Contains network requests captured during keyword execution via CDP.

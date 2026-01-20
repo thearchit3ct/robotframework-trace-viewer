@@ -9,12 +9,11 @@ Install with: pip install reportportal-client
 """
 
 import json
+import logging
 import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -211,9 +210,7 @@ class ReportPortalExporter:
                 if not kw_dir.is_dir():
                     continue
 
-                self._export_keyword(
-                    client, kw_dir, test_uuid, include_screenshots
-                )
+                self._export_keyword(client, kw_dir, test_uuid, include_screenshots)
                 steps_count += 1
 
         # Finish test item
@@ -269,9 +266,7 @@ class ReportPortalExporter:
             }
 
         # Start launch
-        self.start_launch(
-            description=f"Exported {len(trace_dirs)} traces from {traces_dir.name}"
-        )
+        self.start_launch(description=f"Exported {len(trace_dirs)} traces from {traces_dir.name}")
 
         results = {
             "total": len(trace_dirs),
@@ -362,9 +357,7 @@ class ReportPortalExporter:
         if include_screenshots:
             screenshot_path = kw_dir / "screenshot.png"
             if screenshot_path.exists():
-                self._upload_attachment(
-                    client, step_uuid, screenshot_path, "Screenshot"
-                )
+                self._upload_attachment(client, step_uuid, screenshot_path, "Screenshot")
 
         # Finish step
         client.finish_test_item(

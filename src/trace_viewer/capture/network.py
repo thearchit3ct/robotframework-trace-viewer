@@ -123,9 +123,7 @@ class NetworkCapture:
                 # Check if browser supports CDP (Chrome, Chromium, Edge)
                 browser_name = driver.capabilities.get("browserName", "").lower()
                 if browser_name not in ("chrome", "chromium", "msedge", "edge"):
-                    logger.debug(
-                        f"Network capture not supported for browser: {browser_name}"
-                    )
+                    logger.debug(f"Network capture not supported for browser: {browser_name}")
                     return False
 
                 # Enable Network domain
@@ -280,9 +278,7 @@ class NetworkCapture:
         if request_id in self._pending_requests:
             req = self._pending_requests[request_id]
             req["status"] = response.get("status", 0)
-            req["response_headers"] = self._truncate_headers(
-                response.get("headers", {})
-            )
+            req["response_headers"] = self._truncate_headers(response.get("headers", {}))
             req["mime_type"] = response.get("mimeType", "")
 
     def _handle_loading_finished(self, params: dict[str, Any]) -> None:

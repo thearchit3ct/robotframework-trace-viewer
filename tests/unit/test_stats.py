@@ -1,8 +1,9 @@
 """Unit tests for the Statistics Dashboard module."""
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 class TestStatsDashboardInit:
@@ -109,9 +110,7 @@ class TestCalculateStatistics:
             trace_dir = tmp_path / f"test{i}"
             trace_dir.mkdir()
             (trace_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"test_name": f"Test {i}", "status": "PASS", "duration_ms": duration}
-                )
+                json.dumps({"test_name": f"Test {i}", "status": "PASS", "duration_ms": duration})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -135,9 +134,7 @@ class TestSlowestTests:
             trace_dir = tmp_path / f"test{i}"
             trace_dir.mkdir()
             (trace_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"test_name": f"Test {i}", "status": "PASS", "duration_ms": duration}
-                )
+                json.dumps({"test_name": f"Test {i}", "status": "PASS", "duration_ms": duration})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -157,9 +154,7 @@ class TestSlowestTests:
             trace_dir = tmp_path / f"test{i}"
             trace_dir.mkdir()
             (trace_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"test_name": f"Test {i}", "status": "PASS", "duration_ms": i * 100}
-                )
+                json.dumps({"test_name": f"Test {i}", "status": "PASS", "duration_ms": i * 100})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -180,9 +175,7 @@ class TestFlakyTests:
             trace_dir = tmp_path / f"flaky_test_{i}"
             trace_dir.mkdir()
             (trace_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"test_name": "Flaky Test", "status": status, "duration_ms": 100}
-                )
+                json.dumps({"test_name": "Flaky Test", "status": status, "duration_ms": 100})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -203,9 +196,7 @@ class TestFlakyTests:
             trace_dir = tmp_path / f"stable_test_{i}"
             trace_dir.mkdir()
             (trace_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"test_name": "Stable Test", "status": "PASS", "duration_ms": 100}
-                )
+                json.dumps({"test_name": "Stable Test", "status": "PASS", "duration_ms": 100})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -236,9 +227,7 @@ class TestKeywordStats:
             kw_dir = keywords_dir / f"00{i+1}_keyword"
             kw_dir.mkdir()
             (kw_dir / "metadata.json").write_text(
-                json.dumps(
-                    {"name": "Click Button", "status": "PASS", "duration_ms": 100}
-                )
+                json.dumps({"name": "Click Button", "status": "PASS", "duration_ms": 100})
             )
 
         dashboard = StatsDashboard(tmp_path)
@@ -282,9 +271,7 @@ class TestGenerateHtml:
         trace_dir = tmp_path / "test1"
         trace_dir.mkdir()
         (trace_dir / "manifest.json").write_text(
-            json.dumps(
-                {"test_name": "Example Test", "status": "PASS", "duration_ms": 500}
-            )
+            json.dumps({"test_name": "Example Test", "status": "PASS", "duration_ms": 500})
         )
 
         dashboard = StatsDashboard(tmp_path)
@@ -361,6 +348,7 @@ class TestCLIStatsCommand:
     def test_stats_command_generates_dashboard(self, tmp_path: Path) -> None:
         """Stats command generates dashboard file."""
         from click.testing import CliRunner
+
         from trace_viewer.cli import main
 
         # Create a trace
@@ -380,6 +368,7 @@ class TestCLIStatsCommand:
     def test_stats_command_shows_summary(self, tmp_path: Path) -> None:
         """Stats command shows summary statistics."""
         from click.testing import CliRunner
+
         from trace_viewer.cli import main
 
         # Create traces
@@ -401,6 +390,7 @@ class TestCLIStatsCommand:
     def test_stats_command_custom_output(self, tmp_path: Path) -> None:
         """Stats command respects custom output path."""
         from click.testing import CliRunner
+
         from trace_viewer.cli import main
 
         # Create a trace
@@ -412,9 +402,7 @@ class TestCLIStatsCommand:
 
         output_path = tmp_path / "custom_dashboard.html"
         runner = CliRunner()
-        result = runner.invoke(
-            main, ["stats", str(tmp_path / "traces"), "-o", str(output_path)]
-        )
+        result = runner.invoke(main, ["stats", str(tmp_path / "traces"), "-o", str(output_path)])
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -422,6 +410,7 @@ class TestCLIStatsCommand:
     def test_stats_command_nonexistent_directory(self) -> None:
         """Stats command fails for nonexistent directory."""
         from click.testing import CliRunner
+
         from trace_viewer.cli import main
 
         runner = CliRunner()

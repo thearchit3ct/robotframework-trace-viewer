@@ -1,7 +1,6 @@
 """Unit tests for the NetworkCapture module."""
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 class TestNetworkCapture:
@@ -47,9 +46,7 @@ class TestNetworkCapture:
 
             assert result is True
             assert capture.is_enabled() is True
-            mock_driver_instance.execute_cdp_cmd.assert_called_once_with(
-                "Network.enable", {}
-            )
+            mock_driver_instance.execute_cdp_cmd.assert_called_once_with("Network.enable", {})
 
     def test_enable_returns_false_with_firefox_browser(self) -> None:
         """Enable returns False with Firefox browser that doesn't support CDP."""
@@ -198,8 +195,9 @@ class TestNetworkCaptureRequestHandling:
 
     def test_handle_loading_finished_moves_to_captured(self) -> None:
         """_handle_loading_finished moves request from pending to captured."""
-        from trace_viewer.capture.network import NetworkCapture
         import time
+
+        from trace_viewer.capture.network import NetworkCapture
 
         capture = NetworkCapture()
         # Add a pending request with start_time
@@ -228,8 +226,9 @@ class TestNetworkCaptureRequestHandling:
 
     def test_handle_loading_failed_moves_to_captured_with_error(self) -> None:
         """_handle_loading_failed moves request to captured with error info."""
-        from trace_viewer.capture.network import NetworkCapture
         import time
+
+        from trace_viewer.capture.network import NetworkCapture
 
         capture = NetworkCapture()
         capture._pending_requests["123"] = {
@@ -319,12 +318,10 @@ class TestNetworkCaptureGetRequests:
 
         capture = NetworkCapture()
         capture._cdp_enabled = True
-        capture._captured_requests = [
-            {"url": "https://example.com", "status": 200}
-        ]
+        capture._captured_requests = [{"url": "https://example.com", "status": 200}]
 
         with patch.object(capture, "capture", return_value=[{"url": "test"}]) as mock:
-            result = capture.get_requests()
+            capture.get_requests()
             mock.assert_called_once()
 
 
@@ -339,9 +336,7 @@ class TestNetworkCaptureEdgeCases:
             "trace_viewer.capture.network.NetworkCapture._get_selenium_driver"
         ) as mock_driver:
             mock_driver_instance = MagicMock()
-            mock_driver_instance.get_log = MagicMock(
-                side_effect=Exception("Log error")
-            )
+            mock_driver_instance.get_log = MagicMock(side_effect=Exception("Log error"))
             mock_driver.return_value = mock_driver_instance
 
             capture = NetworkCapture()
@@ -359,9 +354,7 @@ class TestNetworkCaptureEdgeCases:
         ) as mock_driver:
             mock_driver_instance = MagicMock()
             mock_driver_instance.capabilities = {"browserName": "chrome"}
-            mock_driver_instance.execute_cdp_cmd = MagicMock(
-                side_effect=Exception("CDP error")
-            )
+            mock_driver_instance.execute_cdp_cmd = MagicMock(side_effect=Exception("CDP error"))
             mock_driver.return_value = mock_driver_instance
 
             capture = NetworkCapture()
