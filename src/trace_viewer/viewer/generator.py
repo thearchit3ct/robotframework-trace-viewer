@@ -26,7 +26,7 @@ class ViewerGenerator:
         >>> print(f"Viewer generated at: {output_path}")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize ViewerGenerator with default template path."""
         self.template_path = Path(__file__).parent / "templates" / "viewer.html"
 

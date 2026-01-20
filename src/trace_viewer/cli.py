@@ -20,7 +20,17 @@ def main() -> None:
 @main.command("open")
 @click.argument("trace_path", type=click.Path(exists=True))
 def open_trace(trace_path: str) -> None:
-    """Open a trace in the default web browser."""
+    """Open a trace in the default web browser.
+
+    Searches for viewer.html or index.html in the trace directory and opens
+    it in the default web browser.
+
+    Args:
+        trace_path: Path to the trace directory.
+
+    Raises:
+        SystemExit: If no viewer.html or index.html is found.
+    """
     path = Path(trace_path)
 
     # Search for viewer.html or index.html
@@ -42,7 +52,16 @@ def open_trace(trace_path: str) -> None:
 @main.command("list")
 @click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
 def list_traces(traces_dir: str) -> None:
-    """List available traces in a directory."""
+    """List available traces in a directory.
+
+    Scans a directory for trace folders and displays a summary of each
+    including test name, status, path, and duration. Results are sorted
+    by date in descending order.
+
+    Args:
+        traces_dir: Path to the directory containing trace folders.
+            Defaults to './traces'.
+    """
     path = Path(traces_dir)
     traces: list[dict[str, Any]] = []
 
@@ -81,7 +100,18 @@ def list_traces(traces_dir: str) -> None:
 @main.command()
 @click.argument("trace_path", type=click.Path(exists=True))
 def info(trace_path: str) -> None:
-    """Display detailed information about a trace."""
+    """Display detailed information about a trace.
+
+    Reads the manifest.json from a trace directory and displays comprehensive
+    information including test name, status, suite details, timing, keyword
+    count, and the first 10 keywords with their statuses.
+
+    Args:
+        trace_path: Path to the trace directory.
+
+    Raises:
+        SystemExit: If manifest.json is not found in the trace directory.
+    """
     path = Path(trace_path)
     manifest = path / "manifest.json"
 
