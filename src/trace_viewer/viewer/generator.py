@@ -4,9 +4,9 @@ This module provides the ViewerGenerator class which generates static HTML
 viewer files from Robot Framework trace data.
 """
 
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 import json
+from pathlib import Path
+from typing import Any, Optional
 
 
 class ViewerGenerator:
@@ -30,7 +30,7 @@ class ViewerGenerator:
         """Initialize ViewerGenerator with default template path."""
         self.template_path = Path(__file__).parent / "templates" / "viewer.html"
 
-    def generate(self, trace_dir: Path, trace_data: Dict[str, Any]) -> Path:
+    def generate(self, trace_dir: Path, trace_data: dict[str, Any]) -> Path:
         """Generate viewer.html in the trace directory.
 
         Reads the HTML template, prepares the trace data for the viewer,
@@ -66,7 +66,7 @@ class ViewerGenerator:
             raise ValueError("trace_data must be a dictionary")
 
         # Read the template
-        template = self.template_path.read_text(encoding='utf-8')
+        template = self.template_path.read_text(encoding="utf-8")
 
         # Prepare viewer data with relative screenshot paths
         viewer_data = self._prepare_viewer_data(trace_dir, trace_data)
@@ -75,18 +75,16 @@ class ViewerGenerator:
         json_data = json.dumps(viewer_data, ensure_ascii=False, indent=2, default=str)
 
         # Replace placeholders
-        html = template.replace('{{TRACE_DATA}}', json_data)
-        html = html.replace('{{TEST_NAME}}', viewer_data.get('test_name', 'Trace Viewer'))
+        html = template.replace("{{TRACE_DATA}}", json_data)
+        html = html.replace("{{TEST_NAME}}", viewer_data.get("test_name", "Trace Viewer"))
 
         # Write the viewer
         output_path = trace_dir / "viewer.html"
-        output_path.write_text(html, encoding='utf-8')
+        output_path.write_text(html, encoding="utf-8")
 
         return output_path
 
-    def _prepare_viewer_data(
-        self, trace_dir: Path, trace_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _prepare_viewer_data(self, trace_dir: Path, trace_data: dict[str, Any]) -> dict[str, Any]:
         """Prepare data structure for the viewer.
 
         Transforms raw trace data into the format expected by the viewer
@@ -107,7 +105,7 @@ class ViewerGenerator:
             "message": trace_data.get("message", ""),
             "start_time": trace_data.get("start_time", ""),
             "duration_ms": trace_data.get("duration_ms", 0),
-            "keywords": []
+            "keywords": [],
         }
 
         # Process keywords
@@ -118,9 +116,7 @@ class ViewerGenerator:
 
         return viewer_data
 
-    def _process_keyword(
-        self, trace_dir: Path, keyword: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _process_keyword(self, trace_dir: Path, keyword: dict[str, Any]) -> dict[str, Any]:
         """Process a single keyword for the viewer.
 
         Ensures all required fields are present and converts screenshot
@@ -142,7 +138,7 @@ class ViewerGenerator:
             "variables": keyword.get("variables", {}),
             "level": keyword.get("level", 0),
             "parent": keyword.get("parent"),
-            "message": keyword.get("message", "")
+            "message": keyword.get("message", ""),
         }
 
         # Handle screenshot path
@@ -189,7 +185,7 @@ class ViewerGenerator:
         if not manifest_path.exists():
             raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-        with open(manifest_path, 'r', encoding='utf-8') as f:
+        with open(manifest_path, encoding="utf-8") as f:
             manifest = json.load(f)
 
         # Load keywords from keyword directories
@@ -200,7 +196,7 @@ class ViewerGenerator:
 
         return self.generate(trace_dir, trace_data)
 
-    def _load_keywords_from_dir(self, trace_dir: Path) -> List[Dict[str, Any]]:
+    def _load_keywords_from_dir(self, trace_dir: Path) -> list[dict[str, Any]]:
         """Load keyword data from the keywords subdirectory.
 
         Scans the keywords/ directory for keyword directories (001_name, 002_name, etc.)
@@ -231,7 +227,7 @@ class ViewerGenerator:
 
         return keywords
 
-    def _load_keyword_from_dir(self, kw_dir: Path) -> Optional[Dict[str, Any]]:
+    def _load_keyword_from_dir(self, kw_dir: Path) -> Optional[dict[str, Any]]:
         """Load a single keyword from its directory.
 
         Args:
@@ -246,7 +242,7 @@ class ViewerGenerator:
         metadata_path = kw_dir / "metadata.json"
         if metadata_path.exists():
             try:
-                with open(metadata_path, 'r', encoding='utf-8') as f:
+                with open(metadata_path, encoding="utf-8") as f:
                     keyword = json.load(f)
             except json.JSONDecodeError:
                 return None
@@ -255,7 +251,7 @@ class ViewerGenerator:
         variables_path = kw_dir / "variables.json"
         if variables_path.exists():
             try:
-                with open(variables_path, 'r', encoding='utf-8') as f:
+                with open(variables_path, encoding="utf-8") as f:
                     keyword["variables"] = json.load(f)
             except json.JSONDecodeError:
                 keyword["variables"] = {}

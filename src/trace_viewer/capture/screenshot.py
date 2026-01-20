@@ -132,5 +132,5 @@ class ScreenshotCapture:
             with open(filepath, "wb") as f:
                 f.write(data)
             return True
-        except IOError:
+        except OSError:
             return False

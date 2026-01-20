@@ -4,9 +4,9 @@ These tests use mocks to simulate Robot Framework and Selenium environments
 without requiring an actual browser.
 """
 
-import pytest
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
 from selenium.common.exceptions import (
     InvalidSessionIdException,
     NoSuchWindowException,

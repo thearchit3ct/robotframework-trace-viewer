@@ -5,11 +5,11 @@ storage of Robot Framework trace data including manifests, keyword metadata,
 variables, and screenshots.
 """
 
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, Any
 import json
 import re
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 
 class TraceWriter:
@@ -79,11 +79,11 @@ class TraceWriter:
             'aaaaaaaaaa'
         """
         # Remove special characters, keep alphanumeric, whitespace, and hyphens
-        slug = re.sub(r'[^\w\s-]', '', text.lower())
+        slug = re.sub(r"[^\w\s-]", "", text.lower())
         # Replace whitespace and hyphens with underscores, strip trailing underscores
-        slug = re.sub(r'[-\s]+', '_', slug).strip('_')
+        slug = re.sub(r"[-\s]+", "_", slug).strip("_")
         # Return slug truncated to max_length, or 'unnamed' if empty
-        return slug[:max_length] if slug else 'unnamed'
+        return slug[:max_length] if slug else "unnamed"
 
     def create_trace(self, test_name: str) -> Path:
         """Create a new trace directory for a test.
@@ -103,7 +103,7 @@ class TraceWriter:
             >>> path = writer.create_trace("Login Test")
             >>> path.name  # e.g., 'login_test_20250119_143022'
         """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         slug = self.slugify(test_name)
         trace_name = f"{slug}_{timestamp}"
         self._current_trace_dir = self.base_dir / trace_name
@@ -144,7 +144,7 @@ class TraceWriter:
         keyword_dir.mkdir(parents=True, exist_ok=True)
         return keyword_dir
 
-    def write_manifest(self, data: Dict[str, Any]) -> Path:
+    def write_manifest(self, data: dict[str, Any]) -> Path:
         """Write manifest.json for current trace.
 
         The manifest contains metadata about the test execution including
@@ -165,7 +165,7 @@ class TraceWriter:
         self._write_json_atomic(manifest_path, data)
         return manifest_path
 
-    def write_keyword_metadata(self, keyword_dir: Path, data: Dict[str, Any]) -> Path:
+    def write_keyword_metadata(self, keyword_dir: Path, data: dict[str, Any]) -> Path:
         """Write metadata.json for a keyword.
 
         Keyword metadata includes information such as name, library,
@@ -182,7 +182,7 @@ class TraceWriter:
         self._write_json_atomic(metadata_path, data)
         return metadata_path
 
-    def write_keyword_variables(self, keyword_dir: Path, data: Dict[str, Any]) -> Path:
+    def write_keyword_variables(self, keyword_dir: Path, data: dict[str, Any]) -> Path:
         """Write variables.json for a keyword.
 
         Contains a snapshot of Robot Framework variables at the time
@@ -216,7 +216,7 @@ class TraceWriter:
         screenshot_path.write_bytes(png_data)
         return screenshot_path
 
-    def _write_json_atomic(self, path: Path, data: Dict[str, Any]) -> None:
+    def _write_json_atomic(self, path: Path, data: dict[str, Any]) -> None:
         """Write JSON atomically using write-to-tmp-then-rename pattern.
 
         This ensures that the file is never in a partial/corrupted state.
@@ -226,8 +226,8 @@ class TraceWriter:
             path: Target path for the JSON file.
             data: Dictionary to serialize as JSON.
         """
-        tmp_path = path.with_suffix('.tmp')
-        with open(tmp_path, 'w', encoding='utf-8') as f:
+        tmp_path = path.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
         tmp_path.rename(path)
 

@@ -1,9 +1,10 @@
 """Integration tests for the full trace capture flow."""
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 from trace_viewer.listener import TraceListener
 from trace_viewer.storage.trace_writer import TraceWriter
@@ -172,9 +173,7 @@ class TestFullTraceFlow:
             libname="SeleniumLibrary",
             type="KEYWORD",
         )
-        kw_result = create_mock_result(
-            status="FAIL", message="Element not found", elapsed_time=0.1
-        )
+        kw_result = create_mock_result(status="FAIL", message="Element not found", elapsed_time=0.1)
 
         listener.start_suite(suite_data, suite_result)
         listener.start_test(test_data, test_result)

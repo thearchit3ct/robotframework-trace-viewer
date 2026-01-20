@@ -1,10 +1,11 @@
 """Unit tests for trace_viewer.storage module."""
 
 import json
-import pytest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-from datetime import datetime
+
+import pytest
 
 from trace_viewer.storage import TraceWriter
 
@@ -97,7 +98,7 @@ class TestCreateTrace:
         writer = TraceWriter(str(tmp_path))
 
         # Patch datetime in the module where it's used
-        with patch('trace_viewer.storage.trace_writer.datetime') as mock_datetime:
+        with patch("trace_viewer.storage.trace_writer.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 1, 19, 14, 30, 22)
             trace_dir = writer.create_trace("Test")
 
@@ -209,7 +210,7 @@ class TestWriteManifest:
         data = {"test_name": "Test", "status": "PASS", "duration_ms": 1234}
         manifest_path = writer.write_manifest(data)
 
-        content = json.loads(manifest_path.read_text(encoding='utf-8'))
+        content = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert content == data
 
     def test_write_manifest_without_trace_raises_error(self, tmp_path):
@@ -227,7 +228,7 @@ class TestWriteManifest:
         data = {"name": "Test avec accents", "message": "Erreur: element introuvable"}
         manifest_path = writer.write_manifest(data)
 
-        content = json.loads(manifest_path.read_text(encoding='utf-8'))
+        content = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert content["message"] == "Erreur: element introuvable"
         assert content["name"] == "Test avec accents"
 
@@ -260,11 +261,11 @@ class TestWriteKeywordMetadata:
             "library": "SeleniumLibrary",
             "args": ["button#submit"],
             "status": "PASS",
-            "duration_ms": 150
+            "duration_ms": 150,
         }
         metadata_path = writer.write_keyword_metadata(kw_dir, data)
 
-        content = json.loads(metadata_path.read_text(encoding='utf-8'))
+        content = json.loads(metadata_path.read_text(encoding="utf-8"))
         assert content == data
 
 
@@ -293,11 +294,11 @@ class TestWriteKeywordVariables:
         data = {
             "scalar": {"${USERNAME}": "testuser", "${PASSWORD}": "***MASKED***"},
             "list": {"@{ITEMS}": ["a", "b", "c"]},
-            "dict": {"&{CONFIG}": {"timeout": "30s"}}
+            "dict": {"&{CONFIG}": {"timeout": "30s"}},
         }
         variables_path = writer.write_keyword_variables(kw_dir, data)
 
-        content = json.loads(variables_path.read_text(encoding='utf-8'))
+        content = json.loads(variables_path.read_text(encoding="utf-8"))
         assert content == data
 
 
@@ -311,7 +312,7 @@ class TestWriteScreenshot:
         kw_dir = writer.create_keyword_dir("Open Browser")
 
         # Minimal valid PNG header
-        png_data = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 
         screenshot_path = writer.write_screenshot(kw_dir, png_data)
 
@@ -352,9 +353,9 @@ class TestWriteJsonAtomic:
         writer._write_json_atomic(target_path, data)
 
         assert target_path.exists()
-        assert not target_path.with_suffix('.tmp').exists()
+        assert not target_path.with_suffix(".tmp").exists()
 
-        content = json.loads(target_path.read_text(encoding='utf-8'))
+        content = json.loads(target_path.read_text(encoding="utf-8"))
         assert content == data
 
     def test_write_json_atomic_handles_datetime(self, tmp_path):
@@ -368,7 +369,7 @@ class TestWriteJsonAtomic:
 
         writer._write_json_atomic(target_path, data)
 
-        content = json.loads(target_path.read_text(encoding='utf-8'))
+        content = json.loads(target_path.read_text(encoding="utf-8"))
         assert content["timestamp"] == "2025-01-19 14:30:22"
 
     def test_write_json_atomic_uses_indent_2(self, tmp_path):
@@ -381,7 +382,7 @@ class TestWriteJsonAtomic:
 
         writer._write_json_atomic(target_path, data)
 
-        raw_content = target_path.read_text(encoding='utf-8')
+        raw_content = target_path.read_text(encoding="utf-8")
         # Check that the JSON is formatted with indent
         assert '  "key"' in raw_content
 
@@ -396,7 +397,7 @@ class TestWriteJsonAtomic:
         writer._write_json_atomic(target_path, data)
 
         # Read as UTF-8 and verify
-        raw_content = target_path.read_text(encoding='utf-8')
+        raw_content = target_path.read_text(encoding="utf-8")
         assert "cafe" in raw_content
 
 

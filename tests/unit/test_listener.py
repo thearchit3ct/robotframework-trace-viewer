@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
-
 from trace_viewer.listener import (
     TraceListener,
     get_iso_timestamp,
@@ -56,7 +54,10 @@ class TestSlugify:
 
     def test_slugify_robot_framework_test_name(self) -> None:
         """Test with realistic RF test name."""
-        assert slugify("Login Should Work With Valid Credentials") == "login_should_work_with_valid_credentials"
+        assert (
+            slugify("Login Should Work With Valid Credentials")
+            == "login_should_work_with_valid_credentials"
+        )
 
     def test_slugify_truncation_does_not_end_with_underscore(self) -> None:
         """Test that truncation removes trailing underscores."""
@@ -141,9 +142,7 @@ class TestTraceListenerInit:
 
         assert listener.capture_mode == "on_failure"
 
-    def test_listener_init_invalid_capture_mode_defaults_to_full(
-        self, tmp_path: Path
-    ) -> None:
+    def test_listener_init_invalid_capture_mode_defaults_to_full(self, tmp_path: Path) -> None:
         """Test that invalid capture mode defaults to 'full'."""
         output_dir = tmp_path / "traces"
         listener = TraceListener(output_dir=str(output_dir), capture_mode="invalid")
@@ -388,7 +387,9 @@ class TestTraceListenerKeywordTracking:
         assert len(listener.current_test["keywords"]) == 2
         # First in list is the child (ended first)
         assert listener.current_test["keywords"][0]["level"] == 2
-        assert listener.current_test["keywords"][0]["parent_keyword"] == "Login With Valid Credentials"
+        assert (
+            listener.current_test["keywords"][0]["parent_keyword"] == "Login With Valid Credentials"
+        )
         assert listener.current_test["keywords"][0]["name"] == "Input Text"
         # Second in list is the parent (ended last)
         assert listener.current_test["keywords"][1]["level"] == 1
@@ -481,9 +482,7 @@ class TestTraceListenerEndTest:
 
         test_dir = listener.current_test_dir
 
-        test_result = create_mock_result(
-            status="PASS", message="", elapsed_time=2.5
-        )
+        test_result = create_mock_result(status="PASS", message="", elapsed_time=2.5)
         listener.end_test(test_data, test_result)
 
         # Verify manifest exists and has correct content
@@ -554,9 +553,7 @@ class TestTraceListenerFullFlow:
         ]
 
         for name, lib, args, status in keywords:
-            kw_data = create_mock_data(
-                name=name, args=args, assign=[], libname=lib, type="KEYWORD"
-            )
+            kw_data = create_mock_data(name=name, args=args, assign=[], libname=lib, type="KEYWORD")
             kw_result = create_mock_result(status=status, message="", elapsed_time=0.3)
             listener.start_keyword(kw_data, kw_result)
             listener.end_keyword(kw_data, kw_result)
@@ -574,7 +571,7 @@ class TestTraceListenerFullFlow:
         assert (test_dir / "keywords").exists()
 
         # Verify all keyword folders exist
-        for i in range(1, 6):
+        for _i in range(1, 6):
             keyword_folders = list((test_dir / "keywords").iterdir())
             assert len(keyword_folders) == 5
 

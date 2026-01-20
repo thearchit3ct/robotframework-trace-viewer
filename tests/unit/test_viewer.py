@@ -5,8 +5,8 @@ for the trace viewer.
 """
 
 import json
+
 import pytest
-from pathlib import Path
 
 from trace_viewer.viewer import ViewerGenerator
 
@@ -39,7 +39,7 @@ class TestViewerGenerator:
                     "screenshot": "keywords/001_open_browser/screenshot.png",
                     "variables": {"URL": "https://example.com"},
                     "level": 0,
-                    "parent": None
+                    "parent": None,
                 },
                 {
                     "index": 2,
@@ -50,7 +50,7 @@ class TestViewerGenerator:
                     "screenshot": "keywords/002_input_text/screenshot.png",
                     "variables": {"USERNAME": "testuser"},
                     "level": 0,
-                    "parent": None
+                    "parent": None,
                 },
                 {
                     "index": 3,
@@ -62,9 +62,9 @@ class TestViewerGenerator:
                     "variables": {},
                     "level": 0,
                     "parent": None,
-                    "message": "Element 'id=submit' not found"
-                }
-            ]
+                    "message": "Element 'id=submit' not found",
+                },
+            ],
         }
 
     def test_init_sets_template_path(self, generator):
@@ -93,7 +93,7 @@ class TestViewerGenerator:
     def test_generated_file_contains_trace_data(self, generator, sample_trace_data, tmp_path):
         """Test that generated HTML contains the trace data."""
         output_path = generator.generate(tmp_path, sample_trace_data)
-        content = output_path.read_text(encoding='utf-8')
+        content = output_path.read_text(encoding="utf-8")
 
         # Check that test name appears in data
         assert "Login Should Work" in content
@@ -107,7 +107,7 @@ class TestViewerGenerator:
     def test_generated_file_is_valid_html(self, generator, sample_trace_data, tmp_path):
         """Test that generated file is valid HTML structure."""
         output_path = generator.generate(tmp_path, sample_trace_data)
-        content = output_path.read_text(encoding='utf-8')
+        content = output_path.read_text(encoding="utf-8")
 
         assert content.startswith("<!DOCTYPE html>")
         assert "<html" in content
@@ -120,12 +120,13 @@ class TestViewerGenerator:
     def test_generated_file_contains_trace_data_json(self, generator, sample_trace_data, tmp_path):
         """Test that TRACE_DATA is properly embedded as JSON."""
         output_path = generator.generate(tmp_path, sample_trace_data)
-        content = output_path.read_text(encoding='utf-8')
+        content = output_path.read_text(encoding="utf-8")
 
         # Extract the TRACE_DATA JSON from the HTML
         # Look for the pattern: const TRACE_DATA = {...};
         import re
-        match = re.search(r'const TRACE_DATA = ({.*?});', content, re.DOTALL)
+
+        match = re.search(r"const TRACE_DATA = ({.*?});", content, re.DOTALL)
         assert match is not None, "TRACE_DATA not found in generated HTML"
 
         # Verify it's valid JSON
@@ -178,7 +179,7 @@ class TestPrepareViewerData:
             "message": "Test passed",
             "start_time": "2025-01-20T10:00:00Z",
             "duration_ms": 1000,
-            "keywords": []
+            "keywords": [],
         }
 
         result = generator._prepare_viewer_data(tmp_path, trace_data)
@@ -211,7 +212,7 @@ class TestProcessKeyword:
             "level": 1,
             "parent": "Parent Keyword",
             "message": "",
-            "screenshot": "keywords/001_click_button/screenshot.png"
+            "screenshot": "keywords/001_click_button/screenshot.png",
         }
 
         result = generator._process_keyword(tmp_path, keyword)
@@ -246,7 +247,7 @@ class TestProcessKeyword:
         """Test that absolute screenshot paths are converted to relative."""
         keyword = {
             "name": "Test Keyword",
-            "screenshot": str(tmp_path / "keywords" / "001_test" / "screenshot.png")
+            "screenshot": str(tmp_path / "keywords" / "001_test" / "screenshot.png"),
         }
 
         result = generator._process_keyword(tmp_path, keyword)
@@ -256,10 +257,7 @@ class TestProcessKeyword:
 
     def test_process_keyword_with_null_screenshot(self, generator, tmp_path):
         """Test processing keyword with no screenshot."""
-        keyword = {
-            "name": "Test Keyword",
-            "screenshot": None
-        }
+        keyword = {"name": "Test Keyword", "screenshot": None}
 
         result = generator._process_keyword(tmp_path, keyword)
 
@@ -282,10 +280,10 @@ class TestGenerateFromManifest:
             "test_name": "Manifest Test",
             "suite_name": "Test Suite",
             "status": "PASS",
-            "duration_ms": 2000
+            "duration_ms": 2000,
         }
         manifest_path = tmp_path / "manifest.json"
-        with open(manifest_path, 'w') as f:
+        with open(manifest_path, "w") as f:
             json.dump(manifest, f)
 
         # Create keywords directory
@@ -295,14 +293,11 @@ class TestGenerateFromManifest:
         # Create keyword 1
         kw1_dir = keywords_dir / "001_open_browser"
         kw1_dir.mkdir()
-        with open(kw1_dir / "metadata.json", 'w') as f:
-            json.dump({
-                "index": 1,
-                "name": "Open Browser",
-                "status": "PASS",
-                "duration_ms": 1000
-            }, f)
-        with open(kw1_dir / "variables.json", 'w') as f:
+        with open(kw1_dir / "metadata.json", "w") as f:
+            json.dump(
+                {"index": 1, "name": "Open Browser", "status": "PASS", "duration_ms": 1000}, f
+            )
+        with open(kw1_dir / "variables.json", "w") as f:
             json.dump({"URL": "https://example.com"}, f)
         # Create a dummy screenshot
         (kw1_dir / "screenshot.png").write_bytes(b"fake png data")
@@ -310,38 +305,29 @@ class TestGenerateFromManifest:
         # Create keyword 2 without screenshot
         kw2_dir = keywords_dir / "002_click_element"
         kw2_dir.mkdir()
-        with open(kw2_dir / "metadata.json", 'w') as f:
-            json.dump({
-                "index": 2,
-                "name": "Click Element",
-                "status": "PASS",
-                "duration_ms": 500
-            }, f)
+        with open(kw2_dir / "metadata.json", "w") as f:
+            json.dump(
+                {"index": 2, "name": "Click Element", "status": "PASS", "duration_ms": 500}, f
+            )
 
         return tmp_path
 
-    def test_generate_from_manifest_creates_viewer(
-        self, generator, trace_dir_with_manifest
-    ):
+    def test_generate_from_manifest_creates_viewer(self, generator, trace_dir_with_manifest):
         """Test generating viewer from existing trace directory."""
         output_path = generator.generate_from_manifest(trace_dir_with_manifest)
 
         assert output_path.exists()
         assert output_path.name == "viewer.html"
 
-    def test_generate_from_manifest_includes_keywords(
-        self, generator, trace_dir_with_manifest
-    ):
+    def test_generate_from_manifest_includes_keywords(self, generator, trace_dir_with_manifest):
         """Test that keywords from directory are included in viewer."""
         output_path = generator.generate_from_manifest(trace_dir_with_manifest)
-        content = output_path.read_text(encoding='utf-8')
+        content = output_path.read_text(encoding="utf-8")
 
         assert "Open Browser" in content
         assert "Click Element" in content
 
-    def test_generate_from_manifest_missing_manifest_raises_error(
-        self, generator, tmp_path
-    ):
+    def test_generate_from_manifest_missing_manifest_raises_error(self, generator, tmp_path):
         """Test that missing manifest raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
             generator.generate_from_manifest(tmp_path)
@@ -379,7 +365,7 @@ class TestLoadKeywordsFromDir:
         for name in ["003_third", "001_first", "002_second"]:
             kw_dir = keywords_dir / name
             kw_dir.mkdir()
-            with open(kw_dir / "metadata.json", 'w') as f:
+            with open(kw_dir / "metadata.json", "w") as f:
                 json.dump({"name": name.split("_")[1]}, f)
 
         result = generator._load_keywords_from_dir(tmp_path)
@@ -395,7 +381,7 @@ class TestLoadKeywordsFromDir:
         kw_dir = keywords_dir / "001_test"
         kw_dir.mkdir(parents=True)
 
-        with open(kw_dir / "metadata.json", 'w') as f:
+        with open(kw_dir / "metadata.json", "w") as f:
             json.dump({"name": "Test"}, f)
         (kw_dir / "screenshot.png").write_bytes(b"fake png")
 
@@ -410,7 +396,7 @@ class TestLoadKeywordsFromDir:
         kw_dir = keywords_dir / "001_test"
         kw_dir.mkdir(parents=True)
 
-        with open(kw_dir / "metadata.json", 'w') as f:
+        with open(kw_dir / "metadata.json", "w") as f:
             json.dump({"name": "Test"}, f)
 
         result = generator._load_keywords_from_dir(tmp_path)
@@ -424,9 +410,9 @@ class TestLoadKeywordsFromDir:
         kw_dir = keywords_dir / "001_test"
         kw_dir.mkdir(parents=True)
 
-        with open(kw_dir / "metadata.json", 'w') as f:
+        with open(kw_dir / "metadata.json", "w") as f:
             json.dump({"name": "Test"}, f)
-        with open(kw_dir / "variables.json", 'w') as f:
+        with open(kw_dir / "variables.json", "w") as f:
             json.dump({"VAR1": "value1", "VAR2": "value2"}, f)
 
         result = generator._load_keywords_from_dir(tmp_path)

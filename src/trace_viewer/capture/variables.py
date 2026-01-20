@@ -1,7 +1,7 @@
 """Capture Robot Framework variables with automatic sensitive data masking."""
 
-from typing import Any, Dict, Optional
 import json
+from typing import Any, Optional
 
 
 class VariablesCapture:
@@ -19,15 +19,15 @@ class VariablesCapture:
     """
 
     SENSITIVE_PATTERNS: tuple[str, ...] = (
-        'password',
-        'secret',
-        'token',
-        'key',
-        'credential',
-        'auth',
-        'api_key',
+        "password",
+        "secret",
+        "token",
+        "key",
+        "credential",
+        "auth",
+        "api_key",
     )
-    MASKED_VALUE: str = '***MASKED***'
+    MASKED_VALUE: str = "***MASKED***"
     MAX_VALUE_LENGTH: int = 500
 
     def __init__(self) -> None:
@@ -46,6 +46,7 @@ class VariablesCapture:
         """
         if self._builtin is None:
             from robot.libraries.BuiltIn import BuiltIn
+
             self._builtin = BuiltIn()
         return self._builtin
 
@@ -92,10 +93,10 @@ class VariablesCapture:
         try:
             serialized = self._serialize_value(value)
             if len(serialized) > self.MAX_VALUE_LENGTH:
-                return serialized[: self.MAX_VALUE_LENGTH] + '...[truncated]'
+                return serialized[: self.MAX_VALUE_LENGTH] + "...[truncated]"
             return serialized
         except Exception:
-            return '<non-serializable>'
+            return "<non-serializable>"
 
     def _serialize_value(self, value: Any) -> str:
         """Serialize a value to string.
@@ -113,7 +114,7 @@ class VariablesCapture:
         except (TypeError, ValueError):
             return str(value)
 
-    def capture(self) -> Dict[str, Dict[str, str]]:
+    def capture(self) -> dict[str, dict[str, str]]:
         """Capture all RF variables grouped by type.
 
         Retrieves all Robot Framework variables and organizes them by type
@@ -139,24 +140,24 @@ class VariablesCapture:
         except Exception:
             return {"scalar": {}, "list": {}, "dict": {}}
 
-        result: Dict[str, Dict[str, str]] = {"scalar": {}, "list": {}, "dict": {}}
+        result: dict[str, dict[str, str]] = {"scalar": {}, "list": {}, "dict": {}}
 
         for full_name, value in all_vars.items():
             # Parse variable type and name from RF format
-            if full_name.startswith('&{'):
+            if full_name.startswith("&{"):
                 var_type = "dict"
                 name = full_name[2:-1]  # Remove &{ and }
-            elif full_name.startswith('@{'):
+            elif full_name.startswith("@{"):
                 var_type = "list"
                 name = full_name[2:-1]  # Remove @{ and }
-            elif full_name.startswith('${'):
+            elif full_name.startswith("${"):
                 var_type = "scalar"
                 name = full_name[2:-1]  # Remove ${ and }
             else:
                 continue
 
             # Skip internal RF variables
-            if name.startswith('_') or name in ('CURDIR', 'EXECDIR', 'TEMPDIR'):
+            if name.startswith("_") or name in ("CURDIR", "EXECDIR", "TEMPDIR"):
                 continue
 
             result[var_type][name] = self.mask_value(name, value)
@@ -180,8 +181,8 @@ class VariablesCapture:
         """
         data = self.capture()
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             return True
-        except IOError:
+        except OSError:
             return False

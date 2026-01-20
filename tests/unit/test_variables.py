@@ -3,8 +3,8 @@
 import json
 import os
 import tempfile
-from typing import Any, Dict
-from unittest.mock import MagicMock, patch, PropertyMock
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -119,7 +119,7 @@ class TestMaskValue:
         capture = VariablesCapture()
 
         # Mock _serialize_value to raise an exception
-        with patch.object(capture, '_serialize_value', side_effect=Exception("Cannot serialize")):
+        with patch.object(capture, "_serialize_value", side_effect=Exception("Cannot serialize")):
             result = capture.mask_value("OBJECT", object())
             assert result == "<non-serializable>"
 
@@ -185,7 +185,7 @@ class TestCapture:
         self, capture_with_mock_builtin: VariablesCapture, mock_builtin: MagicMock
     ) -> None:
         """Variables should be grouped by type (scalar, list, dict)."""
-        mock_variables: Dict[str, Any] = {
+        mock_variables: dict[str, Any] = {
             "${USERNAME}": "testuser",
             "${PASSWORD}": "secret123",
             "@{ITEMS}": ["a", "b", "c"],
@@ -216,7 +216,7 @@ class TestCapture:
         self, capture_with_mock_builtin: VariablesCapture, mock_builtin: MagicMock
     ) -> None:
         """Internal RF variables should be skipped."""
-        mock_variables: Dict[str, Any] = {
+        mock_variables: dict[str, Any] = {
             "${USERNAME}": "testuser",
             "${CURDIR}": "/path/to/tests",
             "${EXECDIR}": "/path/to/exec",
@@ -237,7 +237,7 @@ class TestCapture:
         self, capture_with_mock_builtin: VariablesCapture, mock_builtin: MagicMock
     ) -> None:
         """Variables without valid prefixes should be ignored."""
-        mock_variables: Dict[str, Any] = {
+        mock_variables: dict[str, Any] = {
             "${USERNAME}": "testuser",
             "UNKNOWN": "value",
             "%{ENV_VAR}": "envvalue",
@@ -258,23 +258,21 @@ class TestCaptureToFile:
         self, capture_with_mock_builtin: VariablesCapture, mock_builtin: MagicMock
     ) -> None:
         """capture_to_file should write JSON to the specified file."""
-        mock_variables: Dict[str, Any] = {
+        mock_variables: dict[str, Any] = {
             "${USERNAME}": "testuser",
             "${PASSWORD}": "secret123",
         }
 
         mock_builtin.get_variables.return_value = mock_variables
 
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp_file:
             filepath = tmp_file.name
 
         try:
             result = capture_with_mock_builtin.capture_to_file(filepath)
             assert result is True
 
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
 
             assert data["scalar"]["USERNAME"] == "testuser"
@@ -296,7 +294,7 @@ class TestCaptureToFile:
         self, capture_with_mock_builtin: VariablesCapture, mock_builtin: MagicMock
     ) -> None:
         """The output file should contain valid JSON."""
-        mock_variables: Dict[str, Any] = {
+        mock_variables: dict[str, Any] = {
             "${UNICODE}": "cafe resume",
             "@{ITEMS}": ["item1", "item2"],
             "&{CONFIG}": {"key": "value"},
@@ -304,15 +302,13 @@ class TestCaptureToFile:
 
         mock_builtin.get_variables.return_value = mock_variables
 
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp_file:
             filepath = tmp_file.name
 
         try:
             capture_with_mock_builtin.capture_to_file(filepath)
 
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
 
             assert "scalar" in data
@@ -331,19 +327,13 @@ class TestBuiltInProperty:
         assert capture._builtin is None
 
         # Patch at the point of import within the builtin property
-        with patch.dict(
-            'sys.modules',
-            {'robot.libraries.BuiltIn': MagicMock()}
-        ):
+        with patch.dict("sys.modules", {"robot.libraries.BuiltIn": MagicMock()}):
             # We need to import the module fresh or mock at the right place
             mock_builtin_instance = MagicMock()
 
             # Directly set _builtin to simulate what the property does
             # This tests that accessing builtin when _builtin is None will set it
-            with patch(
-                'robot.libraries.BuiltIn.BuiltIn',
-                return_value=mock_builtin_instance
-            ):
+            with patch("robot.libraries.BuiltIn.BuiltIn", return_value=mock_builtin_instance):
                 result = capture.builtin
 
                 assert result is mock_builtin_instance

@@ -14,7 +14,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal, Optional, TYPE_CHECKING
+from typing import Any, Literal
 
 from robot.api.interfaces import ListenerV3
 
@@ -25,6 +25,7 @@ from trace_viewer.storage.trace_writer import TraceWriter
 # ViewerGenerator may not exist yet - import conditionally
 try:
     from trace_viewer.viewer.generator import ViewerGenerator
+
     _HAS_VIEWER_GENERATOR = True
 except ImportError:
     _HAS_VIEWER_GENERATOR = False
@@ -156,7 +157,7 @@ class TraceListener(ListenerV3):
         self.trace_writer = TraceWriter(str(self.output_dir))
         self.screenshot_capture = ScreenshotCapture()
         self.variables_capture = VariablesCapture()
-        self.viewer_generator: Optional[Any] = None
+        self.viewer_generator: Any | None = None
         if _HAS_VIEWER_GENERATOR and ViewerGenerator is not None:
             self.viewer_generator = ViewerGenerator()
 
