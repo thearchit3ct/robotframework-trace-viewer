@@ -1,10 +1,20 @@
-# Robot Framework Trace Viewer
+<p align="center">
+  <img src="docs/images/logo.webp" alt="Robot Framework Trace Viewer" width="200">
+</p>
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Robot Framework](https://img.shields.io/badge/Robot%20Framework-6.0%2B-green.svg)](https://robotframework.org/)
+<h1 align="center">Robot Framework Trace Viewer</h1>
 
-Visual trace viewer for Robot Framework test debugging. Capture screenshots and variables at each keyword execution and browse them in an interactive HTML viewer.
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9%2B-blue.svg" alt="Python 3.9+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://robotframework.org/"><img src="https://img.shields.io/badge/Robot%20Framework-6.0%2B-green.svg" alt="Robot Framework"></a>
+  <a href="https://test.pypi.org/project/robotframework-trace-viewer/"><img src="https://img.shields.io/badge/TestPyPI-0.1.0-orange.svg" alt="TestPyPI"></a>
+</p>
+
+<p align="center">
+  Visual trace viewer for Robot Framework test debugging.<br>
+  Capture screenshots and variables at each keyword execution and browse them in an interactive HTML viewer.
+</p>
 
 ## Features
 
@@ -132,7 +142,7 @@ traces/
 ### Setup
 
 ```bash
-git clone https://github.com/robotframework/robotframework-trace-viewer.git
+git clone https://github.com/thearchit3ct/robotframework-trace-viewer.git
 cd robotframework-trace-viewer
 pip install -e ".[dev]"
 ```

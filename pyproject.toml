@@ -54,10 +54,10 @@ dev = [
 trace-viewer = "trace_viewer.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/robotframework/robotframework-trace-viewer"
-Documentation = "https://github.com/robotframework/robotframework-trace-viewer#readme"
-Repository = "https://github.com/robotframework/robotframework-trace-viewer"
-Issues = "https://github.com/robotframework/robotframework-trace-viewer/issues"
+Homepage = "https://github.com/thearchit3ct/robotframework-trace-viewer"
+Documentation = "https://github.com/thearchit3ct/robotframework-trace-viewer#readme"
+Repository = "https://github.com/thearchit3ct/robotframework-trace-viewer"
+Issues = "https://github.com/thearchit3ct/robotframework-trace-viewer/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trace_viewer"]
