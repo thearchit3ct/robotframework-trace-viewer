@@ -1,0 +1,144 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robotframework-trace-viewer"
+version = "0.2.0"
+description = "Visual trace viewer for Robot Framework test debugging"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Robot Framework Trace Viewer Contributors" }
+]
+keywords = [
+    "robotframework",
+    "testing",
+    "debugging",
+    "trace",
+    "viewer",
+    "selenium",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Robot Framework",
+    "Framework :: Robot Framework :: Tool",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "robotframework>=6.0",
+    "selenium>=4.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+trace-viewer = "trace_viewer.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/thearchit3ct/robotframework-trace-viewer"
+Documentation = "https://github.com/thearchit3ct/robotframework-trace-viewer#readme"
+Repository = "https://github.com/thearchit3ct/robotframework-trace-viewer"
+Issues = "https://github.com/thearchit3ct/robotframework-trace-viewer/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trace_viewer"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.hatch
+    | \.mypy_cache
+    | \.ruff_cache
+    | \.venv
+    | _build
+    | build
+    | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by black)
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "ARG002", # unused method argument (required for RF listener API)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["trace_viewer"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+strict_equality = true
+strict_concatenate = true
+
+[[tool.mypy.overrides]]
+module = [
+    "robot.*",
+    "selenium.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "-ra",
+]
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (may require browser)",
+    "slow: Slow tests",
+]
