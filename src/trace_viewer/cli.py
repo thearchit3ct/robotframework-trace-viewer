@@ -444,5 +444,123 @@ def stats(traces_dir: str, output: Optional[str], open_browser: bool) -> None:
         raise SystemExit(1) from None
 
 
+@main.command("export-rp")
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option(
+    "--endpoint",
+    "-e",
+    envvar="RP_ENDPOINT",
+    required=True,
+    help="ReportPortal server URL. Can also be set via RP_ENDPOINT env var.",
+)
+@click.option(
+    "--project",
+    "-p",
+    envvar="RP_PROJECT",
+    required=True,
+    help="ReportPortal project name. Can also be set via RP_PROJECT env var.",
+)
+@click.option(
+    "--api-key",
+    "-k",
+    envvar="RP_API_KEY",
+    required=True,
+    help="ReportPortal API key. Can also be set via RP_API_KEY env var.",
+)
+@click.option(
+    "--launch-name",
+    "-n",
+    default=None,
+    help="Name for the launch in ReportPortal.",
+)
+@click.option(
+    "--no-screenshots",
+    is_flag=True,
+    default=False,
+    help="Skip uploading screenshots.",
+)
+def export_rp(
+    traces_dir: str,
+    endpoint: str,
+    project: str,
+    api_key: str,
+    launch_name: Optional[str],
+    no_screenshots: bool,
+) -> None:
+    """Export traces to ReportPortal.
+
+    Uploads all traces from a directory to a ReportPortal server for
+    centralized reporting and analysis.
+
+    Requires the 'reportportal-client' package to be installed:
+        pip install reportportal-client
+
+    Args:
+        traces_dir: Path to the directory containing trace folders.
+            Defaults to './traces'.
+        endpoint: ReportPortal server URL.
+        project: ReportPortal project name.
+        api_key: ReportPortal API key (UUID token).
+        launch_name: Optional name for the launch.
+        no_screenshots: If True, skip uploading screenshots.
+
+    Raises:
+        SystemExit: If export fails or ReportPortal client is not installed.
+
+    Examples:
+        trace-viewer export-rp ./traces -e https://rp.example.com -p myproject -k abc123
+        RP_ENDPOINT=... RP_PROJECT=... RP_API_KEY=... trace-viewer export-rp
+    """
+    try:
+        from trace_viewer.integrations.reportportal import ReportPortalExporter
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        click.echo(
+            "Install with: pip install reportportal-client",
+            err=True,
+        )
+        raise SystemExit(1) from None
+
+    traces_path = Path(traces_dir)
+
+    try:
+        click.echo(f"Exporting traces to ReportPortal...")
+        click.echo(f"  Endpoint: {endpoint}")
+        click.echo(f"  Project: {project}")
+        click.echo(f"  Traces: {traces_path}")
+
+        exporter = ReportPortalExporter(
+            endpoint=endpoint,
+            project=project,
+            api_key=api_key,
+            launch_name=launch_name,
+        )
+
+        results = exporter.export_traces(
+            traces_path,
+            include_screenshots=not no_screenshots,
+        )
+
+        # Display results
+        click.echo(f"\nExport complete:")
+        click.echo(f"  Total traces: {results['total']}")
+        click.echo(
+            f"  Exported: {click.style(str(results['exported']), fg='green')}"
+        )
+        if results["failed"] > 0:
+            click.echo(
+                f"  Failed: {click.style(str(results['failed']), fg='red')}"
+            )
+            for error in results.get("errors", []):
+                click.echo(f"    - {error['trace']}: {error['error']}", err=True)
+
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+    except Exception as e:
+        click.echo(f"Error: Failed to export to ReportPortal: {e}", err=True)
+        raise SystemExit(1) from None
+
+
 if __name__ == "__main__":
     main()
