@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace Viewer - {{TEST_NAME}}</title>
+    <style>
+        /* Reset and base styles */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --color-pass: #22c55e;
+            --color-pass-bg: #dcfce7;
+            --color-fail: #ef4444;
+            --color-fail-bg: #fee2e2;
+            --color-skip: #eab308;
+            --color-skip-bg: #fef9c3;
+            --color-not-run: #6b7280;
+            --color-not-run-bg: #f3f4f6;
+            --sidebar-width: 280px;
+            --header-height: 60px;
+            --footer-height: 200px;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-tertiary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout */
+        .app {
+            display: grid;
+            grid-template-columns: var(--sidebar-width) 1fr;
+            grid-template-rows: var(--header-height) 1fr var(--footer-height);
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .header-suite {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.pass {
+            background-color: var(--color-pass-bg);
+            color: var(--color-pass);
+        }
+
+        .status-badge.fail {
+            background-color: var(--color-fail-bg);
+            color: var(--color-fail);
+        }
+
+        .status-badge.skip {
+            background-color: var(--color-skip-bg);
+            color: var(--color-skip);
+        }
+
+        .status-badge.not-run {
+            background-color: var(--color-not-run-bg);
+            color: var(--color-not-run);
+        }
+
+        .duration {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 16px 0;
+        }
+
+        .sidebar-header {
+            padding: 0 16px 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 8px;
+        }
+
+        .keyword-list {
+            list-style: none;
+        }
+
+        .keyword-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: background-color 0.15s ease;
+        }
+
+        .keyword-item:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .keyword-item.active {
+            background-color: var(--bg-tertiary);
+            border-left-color: var(--color-pass);
+        }
+
+        .keyword-item.active.fail {
+            border-left-color: var(--color-fail);
+        }
+
+        .keyword-item.active.skip {
+            border-left-color: var(--color-skip);
+        }
+
+        .keyword-item-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .keyword-index {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 24px;
+        }
+
+        .keyword-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .keyword-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .keyword-status-dot.pass {
+            background-color: var(--color-pass);
+        }
+
+        .keyword-status-dot.fail {
+            background-color: var(--color-fail);
+        }
+
+        .keyword-status-dot.skip {
+            background-color: var(--color-skip);
+        }
+
+        .keyword-status-dot.not-run {
+            background-color: var(--color-not-run);
+        }
+
+        .keyword-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            margin-left: 32px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .keyword-level {
+            padding-left: calc(var(--level, 0) * 16px);
+        }
+
+        /* Main content */
+        .main {
+            background: var(--bg-secondary);
+            overflow: auto;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .screenshot-container {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .screenshot-container img {
+            display: block;
+            max-width: 100%;
+            max-height: calc(100vh - var(--header-height) - var(--footer-height) - 48px);
+            object-fit: contain;
+        }
+
+        .no-screenshot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .no-screenshot-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Footer panel */
+        .footer {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+        }
+
+        .panel {
+            padding: 16px 24px;
+            overflow-y: auto;
+        }
+
+        .panel:first-child {
+            border-right: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        /* Metadata panel */
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .metadata-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .metadata-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .metadata-value {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .metadata-value.error {
+            color: var(--color-fail);
+        }
+
+        .args-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .arg-badge {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+        }
+
+        /* Variables panel */
+        .variables-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .variable-item {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+
+        .variable-name {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+            font-weight: 500;
+            color: #7c3aed;
+        }
+
+        .variable-value {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        .variable-masked {
+            color: var(--color-fail);
+            font-style: italic;
+        }
+
+        .no-variables {
+            color: var(--text-secondary);
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
+        /* Keyboard hints */
+        .keyboard-hints {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            background: var(--bg-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 16px;
+            z-index: 100;
+        }
+
+        .keyboard-hint kbd {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.75rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            :root {
+                --sidebar-width: 240px;
+                --footer-height: 180px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows: var(--header-height) auto 1fr auto;
+            }
+
+            .sidebar {
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .footer {
+                grid-template-columns: 1fr;
+            }
+
+            .panel:first-child {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .keyboard-hints {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="header-title" id="test-name"></h1>
+                <span class="header-suite" id="suite-name"></span>
+            </div>
+            <div class="header-right">
+                <span class="status-badge" id="test-status"></span>
+                <span class="duration" id="test-duration"></span>
+            </div>
+        </header>
+
+        <!-- Sidebar with keyword list -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                Keywords (<span id="keywords-count">0</span>)
+            </div>
+            <ul class="keyword-list" id="keyword-list"></ul>
+        </aside>
+
+        <!-- Main screenshot area -->
+        <main class="main" id="main-content">
+            <div class="no-screenshot">
+                <div class="no-screenshot-icon">&#128247;</div>
+                <p>Select a keyword to view its screenshot</p>
+            </div>
+        </main>
+
+        <!-- Footer panels -->
+        <footer class="footer">
+            <div class="panel">
+                <h2 class="panel-title">Keyword Details</h2>
+                <div class="metadata-grid" id="metadata-panel">
+                    <p class="no-variables">Select a keyword to view details</p>
+                </div>
+            </div>
+            <div class="panel">
+                <h2 class="panel-title">Variables</h2>
+                <div class="variables-list" id="variables-panel">
+                    <p class="no-variables">No variables captured</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Keyboard navigation hints -->
+    <div class="keyboard-hints">
+        <span class="keyboard-hint"><kbd>&#8593;</kbd> / <kbd>&#8595;</kbd> Navigate</span>
+        <span class="keyboard-hint"><kbd>Enter</kbd> Select</span>
+    </div>
+
+    <script>
+        // Trace data will be injected by the generator
+        const TRACE_DATA = {{TRACE_DATA}};
+
+        /**
+         * Trace Viewer Application
+         * Provides interactive navigation through Robot Framework test traces
+         */
+        (function() {
+            'use strict';
+
+            // State
+            let selectedKeywordIndex = null;
+
+            // DOM Elements
+            const elements = {
+                testName: document.getElementById('test-name'),
+                suiteName: document.getElementById('suite-name'),
+                testStatus: document.getElementById('test-status'),
+                testDuration: document.getElementById('test-duration'),
+                keywordsCount: document.getElementById('keywords-count'),
+                keywordList: document.getElementById('keyword-list'),
+                mainContent: document.getElementById('main-content'),
+                metadataPanel: document.getElementById('metadata-panel'),
+                variablesPanel: document.getElementById('variables-panel')
+            };
+
+            /**
+             * Format duration in milliseconds to human readable string
+             * @param {number} ms - Duration in milliseconds
+             * @returns {string} Formatted duration
+             */
+            function formatDuration(ms) {
+                if (ms < 1000) {
+                    return `${ms}ms`;
+                } else if (ms < 60000) {
+                    return `${(ms / 1000).toFixed(2)}s`;
+                } else {
+                    const minutes = Math.floor(ms / 60000);
+                    const seconds = ((ms % 60000) / 1000).toFixed(1);
+                    return `${minutes}m ${seconds}s`;
+                }
+            }
+
+            /**
+             * Get CSS class for status
+             * @param {string} status - Status string (PASS, FAIL, SKIP, NOT RUN)
+             * @returns {string} CSS class name
+             */
+            function getStatusClass(status) {
+                const statusMap = {
+                    'PASS': 'pass',
+                    'FAIL': 'fail',
+                    'SKIP': 'skip',
+                    'NOT RUN': 'not-run',
+                    'NOT_RUN': 'not-run'
+                };
+                return statusMap[status?.toUpperCase()] || 'not-run';
+            }
+
+            /**
+             * Escape HTML to prevent XSS
+             * @param {string} str - String to escape
+             * @returns {string} Escaped string
+             */
+            function escapeHtml(str) {
+                if (str === null || str === undefined) return '';
+                const div = document.createElement('div');
+                div.textContent = String(str);
+                return div.innerHTML;
+            }
+
+            /**
+             * Initialize the header with test information
+             */
+            function initializeHeader() {
+                elements.testName.textContent = TRACE_DATA.test_name || 'Unknown Test';
+                elements.suiteName.textContent = TRACE_DATA.suite_name || '';
+
+                const status = TRACE_DATA.status || 'NOT RUN';
+                elements.testStatus.textContent = status;
+                elements.testStatus.className = `status-badge ${getStatusClass(status)}`;
+
+                elements.testDuration.textContent = formatDuration(TRACE_DATA.duration_ms || 0);
+            }
+
+            /**
+             * Create a keyword list item element
+             * @param {Object} keyword - Keyword data
+             * @param {number} index - Index in keywords array
+             * @returns {HTMLElement} List item element
+             */
+            function createKeywordItem(keyword, index) {
+                const li = document.createElement('li');
+                li.className = 'keyword-item';
+                li.dataset.index = index;
+
+                const level = keyword.level || 0;
+                li.style.setProperty('--level', level);
+
+                const statusClass = getStatusClass(keyword.status);
+
+                li.innerHTML = `
+                    <div class="keyword-item-header keyword-level">
+                        <span class="keyword-index">${keyword.index || index + 1}</span>
+                        <span class="keyword-name" title="${escapeHtml(keyword.name)}">${escapeHtml(keyword.name)}</span>
+                        <span class="keyword-status-dot ${statusClass}"></span>
+                    </div>
+                    <div class="keyword-meta keyword-level">
+                        <span>${formatDuration(keyword.duration_ms || 0)}</span>
+                        ${keyword.screenshot ? '<span>&#128247;</span>' : ''}
+                    </div>
+                `;
+
+                li.addEventListener('click', () => selectKeyword(index));
+
+                return li;
+            }
+
+            /**
+             * Initialize the keyword list in the sidebar
+             */
+            function initializeKeywordList() {
+                const keywords = TRACE_DATA.keywords || [];
+                elements.keywordsCount.textContent = keywords.length;
+
+                elements.keywordList.innerHTML = '';
+                keywords.forEach((keyword, index) => {
+                    elements.keywordList.appendChild(createKeywordItem(keyword, index));
+                });
+
+                // Select first keyword if available
+                if (keywords.length > 0) {
+                    selectKeyword(0);
+                }
+            }
+
+            /**
+             * Select and display a keyword
+             * @param {number} index - Index of keyword to select
+             */
+            function selectKeyword(index) {
+                const keywords = TRACE_DATA.keywords || [];
+                if (index < 0 || index >= keywords.length) return;
+
+                // Update selected state
+                selectedKeywordIndex = index;
+
+                // Update UI active state
+                const items = elements.keywordList.querySelectorAll('.keyword-item');
+                items.forEach((item, i) => {
+                    item.classList.toggle('active', i === index);
+                    if (i === index) {
+                        const keyword = keywords[i];
+                        const statusClass = getStatusClass(keyword.status);
+                        item.classList.remove('pass', 'fail', 'skip', 'not-run');
+                        item.classList.add(statusClass);
+
+                        // Scroll into view if needed
+                        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
+                });
+
+                // Display keyword details
+                const keyword = keywords[index];
+                displayScreenshot(keyword);
+                displayMetadata(keyword);
+                displayVariables(keyword);
+            }
+
+            /**
+             * Display screenshot for a keyword
+             * @param {Object} keyword - Keyword data
+             */
+            function displayScreenshot(keyword) {
+                if (keyword.screenshot) {
+                    elements.mainContent.innerHTML = `
+                        <div class="screenshot-container">
+                            <img src="${escapeHtml(keyword.screenshot)}"
+                                 alt="Screenshot for ${escapeHtml(keyword.name)}"
+                                 onerror="this.parentElement.innerHTML='<div class=\\'no-screenshot\\'><div class=\\'no-screenshot-icon\\'>&#128247;</div><p>Failed to load screenshot</p></div>'"
+                            />
+                        </div>
+                    `;
+                } else {
+                    elements.mainContent.innerHTML = `
+                        <div class="no-screenshot">
+                            <div class="no-screenshot-icon">&#128247;</div>
+                            <p>No screenshot captured for this keyword</p>
+                        </div>
+                    `;
+                }
+            }
+
+            /**
+             * Display metadata for a keyword
+             * @param {Object} keyword - Keyword data
+             */
+            function displayMetadata(keyword) {
+                const statusClass = getStatusClass(keyword.status);
+
+                let argsHtml = '';
+                if (keyword.args && keyword.args.length > 0) {
+                    argsHtml = `
+                        <div class="args-list">
+                            ${keyword.args.map(arg => `<span class="arg-badge">${escapeHtml(arg)}</span>`).join('')}
+                        </div>
+                    `;
+                } else {
+                    argsHtml = '<span class="metadata-value">None</span>';
+                }
+
+                let messageHtml = '';
+                if (keyword.message) {
+                    messageHtml = `
+                        <div class="metadata-item" style="grid-column: 1 / -1;">
+                            <span class="metadata-label">Message</span>
+                            <span class="metadata-value ${keyword.status === 'FAIL' ? 'error' : ''}">${escapeHtml(keyword.message)}</span>
+                        </div>
+                    `;
+                }
+
+                elements.metadataPanel.innerHTML = `
+                    <div class="metadata-item">
+                        <span class="metadata-label">Name</span>
+                        <span class="metadata-value">${escapeHtml(keyword.name)}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Status</span>
+                        <span class="status-badge ${statusClass}">${escapeHtml(keyword.status)}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Duration</span>
+                        <span class="metadata-value">${formatDuration(keyword.duration_ms || 0)}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Level</span>
+                        <span class="metadata-value">${keyword.level || 0}</span>
+                    </div>
+                    <div class="metadata-item" style="grid-column: 1 / -1;">
+                        <span class="metadata-label">Arguments</span>
+                        ${argsHtml}
+                    </div>
+                    ${messageHtml}
+                `;
+            }
+
+            /**
+             * Display variables for a keyword
+             * @param {Object} keyword - Keyword data
+             */
+            function displayVariables(keyword) {
+                const variables = keyword.variables || {};
+                const entries = Object.entries(variables);
+
+                if (entries.length === 0) {
+                    elements.variablesPanel.innerHTML = '<p class="no-variables">No variables captured</p>';
+                    return;
+                }
+
+                const html = entries.map(([name, value]) => {
+                    const isMasked = value === '***MASKED***';
+                    const valueClass = isMasked ? 'variable-value variable-masked' : 'variable-value';
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+                    return `
+                        <div class="variable-item">
+                            <span class="variable-name">${escapeHtml(name)}</span>
+                            <span class="${valueClass}">${escapeHtml(displayValue)}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                elements.variablesPanel.innerHTML = html;
+            }
+
+            /**
+             * Handle keyboard navigation
+             * @param {KeyboardEvent} event - Keyboard event
+             */
+            function handleKeyboard(event) {
+                const keywords = TRACE_DATA.keywords || [];
+                if (keywords.length === 0) return;
+
+                switch (event.key) {
+                    case 'ArrowUp':
+                    case 'k':
+                        event.preventDefault();
+                        if (selectedKeywordIndex !== null && selectedKeywordIndex > 0) {
+                            selectKeyword(selectedKeywordIndex - 1);
+                        }
+                        break;
+                    case 'ArrowDown':
+                    case 'j':
+                        event.preventDefault();
+                        if (selectedKeywordIndex !== null && selectedKeywordIndex < keywords.length - 1) {
+                            selectKeyword(selectedKeywordIndex + 1);
+                        } else if (selectedKeywordIndex === null) {
+                            selectKeyword(0);
+                        }
+                        break;
+                    case 'Home':
+                        event.preventDefault();
+                        selectKeyword(0);
+                        break;
+                    case 'End':
+                        event.preventDefault();
+                        selectKeyword(keywords.length - 1);
+                        break;
+                }
+            }
+
+            /**
+             * Initialize the application
+             */
+            function initialize() {
+                initializeHeader();
+                initializeKeywordList();
+
+                // Set up keyboard navigation
+                document.addEventListener('keydown', handleKeyboard);
+            }
+
+            // Start the application when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initialize);
+            } else {
+                initialize();
+            }
+        })();
+    </script>
+</body>
+</html>
