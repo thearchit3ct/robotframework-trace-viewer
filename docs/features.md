@@ -4,15 +4,107 @@ This guide provides detailed documentation for all features of Robot Framework T
 
 ## Table of Contents
 
+- [Configuration File](#configuration-file)
 - [Screenshot Capture](#screenshot-capture)
+- [Full-Page Screenshots](#full-page-screenshots)
+- [On-Failure Ring Buffer](#on-failure-ring-buffer)
 - [DOM Snapshots](#dom-snapshots)
 - [Network Request Capture](#network-request-capture)
 - [Console Logs Capture](#console-logs-capture)
 - [Variable Tracking](#variable-tracking)
+- [Custom Masking Patterns](#custom-masking-patterns)
+- [Search & Filter Viewer](#search--filter-viewer)
+- [Suite-Level Viewer](#suite-level-viewer)
 - [Trace Comparison](#trace-comparison)
+- [Visual Diff](#visual-diff)
+- [GIF Replay](#gif-replay)
 - [Statistics Dashboard](#statistics-dashboard)
+- [WebP Compression](#webp-compression)
+- [Trace Cleanup](#trace-cleanup)
+- [PDF Export](#pdf-export)
 - [ZIP Export](#zip-export)
 - [Pabot Support](#pabot-support)
+- [Pabot Merge Timeline](#pabot-merge-timeline)
+
+---
+
+## Configuration File
+
+The trace viewer supports YAML configuration files for persistent settings.
+
+### Config File Locations
+
+The listener searches for config files in this order:
+
+1. `./trace-viewer.yml` (project directory)
+2. `~/.trace-viewer.yml` (home directory)
+
+### Precedence Chain
+
+Settings are resolved with this precedence (highest first):
+
+1. **CLI arguments** - Listener parameters passed via `--listener`
+2. **Environment variables** - `TRACE_VIEWER_*` prefix
+3. **Config file** - `trace-viewer.yml`
+4. **Defaults** - Built-in default values
+
+### Generating a Config File
+
+```bash
+trace-viewer init
+```
+
+### Complete Config Reference
+
+```yaml
+# Output directory for traces
+output_dir: traces
+
+# Capture mode: full | on_failure | disabled
+capture_mode: full
+
+# Screenshot mode: viewport | full_page
+screenshot_mode: viewport
+
+# Ring buffer size for on_failure mode (number of keywords to keep)
+buffer_size: 10
+
+# Patterns to mask in captured variables (case-insensitive substring match)
+masking_patterns:
+  - password
+  - secret
+  - token
+  - key
+  - credential
+  - auth
+  - api_key
+
+# Compression settings
+compression:
+  format: png          # png | webp
+  quality: 80          # WebP quality (1-100)
+  max_dom_size_kb: 500 # Truncate DOM snapshots larger than this
+
+# Retention policy
+retention:
+  days: 30             # Delete traces older than N days
+  max_traces: 100      # Maximum number of traces to keep
+
+# CI/CD mode (enables on_failure capture + CI-friendly output)
+ci_mode: false
+```
+
+### Environment Variables
+
+| Variable | Config Key | Example |
+|----------|-----------|---------|
+| `TRACE_VIEWER_OUTPUT_DIR` | `output_dir` | `./my_traces` |
+| `TRACE_VIEWER_CAPTURE_MODE` | `capture_mode` | `on_failure` |
+| `TRACE_VIEWER_SCREENSHOT_MODE` | `screenshot_mode` | `full_page` |
+| `TRACE_VIEWER_BUFFER_SIZE` | `buffer_size` | `20` |
+| `TRACE_VIEWER_CI_MODE` | `ci_mode` | `true` |
+| `TRACE_VIEWER_COMPRESSION_FORMAT` | `compression.format` | `webp` |
+| `TRACE_VIEWER_COMPRESSION_QUALITY` | `compression.quality` | `70` |
 
 ---
 
@@ -24,7 +116,7 @@ Screenshots are automatically captured at the end of each keyword execution when
 
 1. The listener detects active browser sessions from SeleniumLibrary or Browser Library
 2. At the end of each keyword, a screenshot is captured
-3. Screenshots are saved as PNG files in the keyword directory
+3. Screenshots are saved as PNG (or WebP if compression is enabled) in the keyword directory
 
 ### Supported Libraries
 
@@ -35,8 +127,6 @@ Screenshots are automatically captured at the end of each keyword execution when
 
 ### Configuration
 
-Screenshots can be controlled via the `capture_mode` listener option:
-
 ```bash
 # Capture at every keyword (default)
 robot --listener "trace_viewer.TraceListener:capture_mode=full" tests/
@@ -45,7 +135,7 @@ robot --listener "trace_viewer.TraceListener:capture_mode=full" tests/
 robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
 
 # Disable screenshot capture
-robot --listener "trace_viewer.TraceListener:capture_mode=none" tests/
+robot --listener "trace_viewer.TraceListener:capture_mode=disabled" tests/
 ```
 
 ### Graceful Handling
@@ -54,6 +144,73 @@ If no browser is open or screenshot capture fails:
 - The keyword is still recorded
 - No screenshot file is created
 - No error is raised (silent skip)
+
+---
+
+## Full-Page Screenshots
+
+Capture the entire scrollable page, not just the visible viewport.
+
+### How It Works
+
+- **Selenium (CDP)**: Uses `Page.captureScreenshot` with `captureBeyondViewport: true`
+- **Browser Library**: Uses Playwright's `page.screenshot(full_page=True)`
+- **Fallback**: If full-page capture fails, automatically falls back to viewport screenshot
+
+### Configuration
+
+```yaml
+# trace-viewer.yml
+screenshot_mode: full_page
+```
+
+Or via CLI:
+
+```bash
+robot --listener "trace_viewer.TraceListener:screenshot_mode=full_page" tests/
+```
+
+### Supported Browsers
+
+| Browser | Full-Page Support |
+|---------|-------------------|
+| Chrome / Chromium | Yes (via CDP) |
+| Edge | Yes (via CDP) |
+| Firefox | Viewport only (no CDP) |
+| Safari | Viewport only |
+
+---
+
+## On-Failure Ring Buffer
+
+In `on_failure` mode, the listener stores captures in an in-memory ring buffer instead of writing to disk.
+
+### How It Works
+
+1. Keywords are captured to a `deque`-based ring buffer (configurable size)
+2. Each capture stores: screenshot bytes, variables, console logs, DOM, network data
+3. **Test PASSES**: Buffer is cleared, zero disk I/O
+4. **Test FAILS**: Buffer is flushed to disk via TraceWriter
+
+### Memory Usage
+
+- Approximately ~100KB per keyword capture (viewport screenshot)
+- Default buffer of 10 keywords = ~1MB memory
+- Memory is released immediately on buffer clear/flush
+
+### Configuration
+
+```yaml
+# trace-viewer.yml
+capture_mode: on_failure
+buffer_size: 15  # Keep last 15 keywords
+```
+
+### Use Cases
+
+- CI/CD pipelines: Only save traces for debugging failed tests
+- Performance: No disk I/O overhead for passing tests
+- Storage: Significantly reduces trace storage in large test suites
 
 ---
 
@@ -79,28 +236,16 @@ The following are preserved:
 - CSS classes
 - Form values
 
-### Example Output
+### DOM Truncation
 
-```html
-<html lang="en">
-<head>
-  <title>Example Domain</title>
-  <style>body { background: #eee; }</style>
-</head>
-<body>
-  <div>
-    <h1>Example Domain</h1>
-    <p>This domain is for use in documentation.</p>
-  </div>
-</body>
-</html>
+Large DOM snapshots are truncated to prevent excessive storage. Configure via:
+
+```yaml
+compression:
+  max_dom_size_kb: 500  # Truncate DOMs larger than 500KB
 ```
 
-### Use Cases
-
-- Debug layout issues by inspecting DOM state
-- Compare page structure between test runs
-- Verify dynamic content rendering
+When truncated, metadata includes `dom_truncated: true`.
 
 ---
 
@@ -108,21 +253,23 @@ The following are preserved:
 
 Network requests are captured using Chrome DevTools Protocol (CDP) for comprehensive HTTP monitoring.
 
-### How It Works
+### Supported Methods
 
-1. CDP is enabled at the start of the test via `Network.enable`
-2. Performance logs are collected during keyword execution
-3. Request/response data is extracted and saved as `network.json`
+| Library | Method | Notes |
+|---------|--------|-------|
+| SeleniumLibrary | CDP via `execute_cdp_cmd` | Chrome/Chromium/Edge |
+| Browser Library | Playwright page events | All browsers |
 
-### Supported Browsers
+### Browser Library Network Capture
 
-| Browser | Support | Notes |
-|---------|---------|-------|
-| Chrome | Full | Native CDP support |
-| Chromium | Full | Native CDP support |
-| Edge | Full | Chromium-based, CDP support |
-| Firefox | Limited | CDP not fully supported |
-| Safari | None | No CDP support |
+When using Browser Library, network requests are captured natively via Playwright:
+
+```python
+page.on('request', handler)
+page.on('response', handler)
+```
+
+This provides the same output format as CDP-based capture, with support for all Playwright-supported browsers.
 
 ### Captured Data
 
@@ -135,17 +282,8 @@ Each network request includes:
       "request_id": "ABC123",
       "url": "https://api.example.com/data",
       "method": "GET",
-      "request_headers": {
-        "User-Agent": "Mozilla/5.0...",
-        "Accept": "application/json"
-      },
       "resource_type": "XHR",
-      "timestamp": 1705750800.123,
       "status": 200,
-      "response_headers": {
-        "content-type": "application/json",
-        "content-length": "1234"
-      },
       "size": 1234,
       "duration_ms": 150,
       "mime_type": "application/json"
@@ -153,30 +291,6 @@ Each network request includes:
   ]
 }
 ```
-
-### Resource Types
-
-- `Document` - HTML pages
-- `Script` - JavaScript files
-- `Stylesheet` - CSS files
-- `Image` - Images
-- `Font` - Web fonts
-- `XHR` - XMLHttpRequest calls
-- `Fetch` - Fetch API calls
-- `WebSocket` - WebSocket connections
-
-### Header Truncation
-
-For privacy and storage efficiency, headers are truncated:
-- Maximum 10 headers per request/response
-- Maximum 200 characters per header value
-
-### Use Cases
-
-- Debug API calls and responses
-- Verify request payloads
-- Identify slow network requests
-- Monitor resource loading
 
 ---
 
@@ -199,46 +313,6 @@ Browser console logs are captured to help debug JavaScript issues.
 | ERROR | Errors (`console.error`) |
 | SEVERE | Critical errors and exceptions |
 
-### Example Output
-
-```json
-{
-  "logs": [
-    {
-      "level": "INFO",
-      "message": "Application initialized",
-      "source": "console-api",
-      "timestamp": 1705750800123
-    },
-    {
-      "level": "WARNING",
-      "message": "Deprecated API usage",
-      "source": "console-api",
-      "timestamp": 1705750800456
-    },
-    {
-      "level": "ERROR",
-      "message": "Uncaught TypeError: Cannot read property 'x' of undefined",
-      "source": "javascript",
-      "timestamp": 1705750800789
-    }
-  ]
-}
-```
-
-### Viewer Display
-
-In the HTML viewer, console logs are displayed with color coding:
-- INFO: Gray
-- WARNING: Orange
-- ERROR: Red
-
-### Use Cases
-
-- Debug JavaScript errors
-- Track application state changes
-- Verify API responses logged to console
-
 ---
 
 ## Variable Tracking
@@ -252,63 +326,94 @@ Robot Framework variables are captured at each keyword execution with automatic 
 3. Sensitive values are masked
 4. Variables are saved as `variables.json`
 
-### Variable Types
-
-| Prefix | Type | Example |
-|--------|------|---------|
-| `$` | Scalar | `${USERNAME}` |
-| `@` | List | `@{ITEMS}` |
-| `&` | Dictionary | `&{CONFIG}` |
-
 ### Sensitive Data Masking
 
-Variables matching these patterns are automatically masked:
+Variables matching configured patterns are automatically masked as `***MASKED***`.
 
-- `password`
-- `secret`
-- `token`
-- `key`
-- `credential`
-- `auth`
-- `api_key`
+Default patterns: `password`, `secret`, `token`, `key`, `credential`, `auth`, `api_key`.
 
-Example:
-```json
-{
-  "scalars": {
-    "USERNAME": "admin",
-    "PASSWORD": "***MASKED***",
-    "API_KEY": "***MASKED***",
-    "BASE_URL": "https://example.com"
-  }
-}
+---
+
+## Custom Masking Patterns
+
+Configure your own sensitive data patterns beyond the defaults.
+
+### Configuration
+
+```yaml
+# trace-viewer.yml
+masking_patterns:
+  - password
+  - secret
+  - token
+  - key
+  - credential
+  - auth
+  - api_key
+  - ssn              # Social Security Number
+  - credit_card      # Credit card data
+  - bank_account     # Banking details
 ```
 
-### Value Truncation
+### How It Works
 
-Long values are truncated to prevent excessive storage:
-- Maximum 1000 characters per value
-- Truncated values end with `... [truncated]`
+- Patterns are compiled as regex at listener startup (one-time cost)
+- Matching is case-insensitive substring match on variable names
+- Matched variable values are replaced with `***MASKED***`
 
-### Example Output
+---
 
-```json
-{
-  "scalars": {
-    "BROWSER": "chrome",
-    "URL": "https://example.com",
-    "TIMEOUT": "30s"
-  },
-  "lists": {
-    "USERS": ["alice", "bob", "charlie"]
-  },
-  "dicts": {
-    "CONFIG": {
-      "env": "production",
-      "debug": false
-    }
-  }
-}
+## Search & Filter Viewer
+
+The interactive HTML viewer includes search and filter capabilities.
+
+### Features
+
+- **Text search**: Filter keywords by name
+- **Status filter**: Dropdown to show ALL / PASS / FAIL / SKIP keywords
+- **Result counter**: Shows number of matching keywords
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `/` | Focus the search input |
+| `Escape` | Clear search and filter |
+
+### How It Works
+
+Keywords are filtered in real-time using JavaScript, matching against `data-name`, `data-status`, and `data-search-text` attributes on each keyword item.
+
+---
+
+## Suite-Level Viewer
+
+Generate an aggregate view of multiple test traces.
+
+### CLI Usage
+
+```bash
+trace-viewer suite ./traces -o suite.html -O
+```
+
+### What It Shows
+
+- **Stats bar**: Total tests, passed, failed, pass rate percentage
+- **Test list sidebar**: Each test with name, status badge (green/red), and duration
+- **Click-through**: Click any test to open its individual viewer
+
+### Embedding vs Linking
+
+- For up to 30 tests: Viewers are embedded for offline use
+- For more than 30 tests: Links to individual viewers to keep file size manageable
+
+### Programmatic Usage
+
+```python
+from trace_viewer.viewer.suite_generator import SuiteViewerGenerator
+
+generator = SuiteViewerGenerator()
+output_path = generator.generate(traces_dir, output_path=Path("suite.html"))
 ```
 
 ---
@@ -317,12 +422,11 @@ Long values are truncated to prevent excessive storage:
 
 Compare two traces to identify differences in test execution.
 
-### How It Works
+### CLI Usage
 
-1. Both traces are loaded and their keywords are extracted
-2. Keywords are aligned using sequence matching
-3. Differences are categorized (matched, modified, added, removed)
-4. An HTML comparison report is generated
+```bash
+trace-viewer compare ./baseline/test_login ./current/test_login -o comparison.html
+```
 
 ### Keyword States
 
@@ -333,31 +437,102 @@ Compare two traces to identify differences in test execution.
 | Added | Keyword exists only in trace 2 |
 | Removed | Keyword exists only in trace 1 |
 
-### CLI Usage
+### Report Contents
 
-```bash
-trace-viewer compare ./baseline/test_login_* ./current/test_login_* -o comparison.html
-```
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-o, --output` | Output path for comparison HTML |
-
-### Comparison Report Contents
-
-The HTML report includes:
 - Summary statistics (total, matched, modified, added, removed)
 - Side-by-side keyword comparison
 - Variable differences highlighted
 - Screenshot comparison (if available)
 
-### Use Cases
+---
 
-- Regression testing: Compare baseline vs current
-- Debug failures: Compare passing vs failing runs
-- Performance analysis: Compare execution times
+## Visual Diff
+
+Pixel-level comparison of screenshots between two traces.
+
+### CLI Usage
+
+```bash
+trace-viewer compare-visual ./baseline/test ./current/test -o diff.html -O
+```
+
+### How It Works
+
+1. Screenshots from matching keywords are loaded as Pillow images
+2. Pixel-by-pixel comparison with configurable threshold (default: 30 per channel)
+3. Changed pixels are overlaid in red on a semi-transparent diff image
+4. Similarity score calculated: `1.0 - (changed_pixels / total_pixels)`
+
+### Output
+
+For each keyword pair:
+
+```python
+{
+    "keyword": "Click Button",
+    "similarity": 0.87,
+    "changed_pixels": 10400,
+    "total_pixels": 80000,
+    "diff_image": b"..."  # PNG bytes with red overlay
+}
+```
+
+### HTML Report
+
+Three-panel view for each keyword:
+1. **Baseline**: Screenshot from trace 1
+2. **Candidate**: Screenshot from trace 2
+3. **Diff**: Red overlay showing changed pixels
+
+### Requirements
+
+Requires Pillow: `pip install robotframework-trace-viewer[media]`
+
+---
+
+## GIF Replay
+
+Generate animated GIF or HTML slideshow from trace screenshots.
+
+### CLI Usage
+
+```bash
+# Animated GIF
+trace-viewer replay ./traces/login_test --format gif --fps 2 --width 800 -o replay.gif
+
+# HTML slideshow
+trace-viewer replay ./traces/login_test --format html -o replay.html
+```
+
+### GIF Generation
+
+- Screenshots are loaded in keyword order
+- Each frame is resized to `max_width` while maintaining aspect ratio
+- FPS controls animation speed (default: 2)
+- Output is a standard GIF file viewable in any browser or image viewer
+
+### HTML Slideshow
+
+- Self-contained HTML with embedded screenshots (base64)
+- Play/Pause/Step controls
+- Keyboard navigation (Space, arrows)
+- Keyword name and metadata displayed below each frame
+
+### Programmatic Usage
+
+```python
+from trace_viewer.media.gif_generator import generate_gif, generate_slideshow
+
+# Generate GIF
+gif_path = generate_gif(trace_dir, fps=3, max_width=1024)
+
+# Generate HTML slideshow
+html_path = generate_slideshow(trace_dir, output=Path("slideshow.html"))
+```
+
+### Requirements
+
+GIF format requires Pillow: `pip install robotframework-trace-viewer[media]`
 
 ---
 
@@ -365,29 +540,11 @@ The HTML report includes:
 
 Generate aggregated statistics across multiple traces.
 
-### How It Works
-
-1. All traces in the specified directory are scanned
-2. Metadata is extracted from each manifest.json
-3. Statistics are calculated (pass rate, durations, etc.)
-4. An HTML dashboard is generated
-
 ### CLI Usage
 
 ```bash
-# Generate dashboard
-trace-viewer stats ./traces -o dashboard.html
-
-# Generate and open in browser
 trace-viewer stats ./traces -o dashboard.html -O
 ```
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-o, --output` | Output path for dashboard HTML |
-| `-O, --open` | Open dashboard in browser after generation |
 
 ### Statistics Included
 
@@ -397,65 +554,118 @@ trace-viewer stats ./traces -o dashboard.html -O
 - Pass rate percentage
 
 #### Duration Statistics
-- Minimum duration
-- Maximum duration
-- Average duration
-- Median duration
-- 95th percentile (P95)
+- Minimum, Maximum, Average, Median, P95
 
 #### Slowest Tests
-- Top 10 slowest tests with durations
-- Links to individual trace viewers
+- Top 10 slowest tests with durations and links to viewers
 
 #### Flaky Tests
 - Tests with inconsistent results (same name, different outcomes)
-- Failure count and total runs
 
-### Example Output
+---
 
+## WebP Compression
+
+Convert PNG screenshots to WebP format for significant storage savings.
+
+### CLI Usage
+
+```bash
+trace-viewer compress ./traces --quality 80
 ```
-Statistics Dashboard
-====================
 
-Summary
--------
-Total Tests: 150
-Passed: 142 (94.7%)
-Failed: 6 (4.0%)
-Skipped: 2 (1.3%)
+### How It Works
 
-Duration Statistics
--------------------
-Min: 0.5s
-Max: 45.2s
-Average: 5.3s
-Median: 3.8s
-P95: 15.2s
+1. Scans all `screenshot.png` files in trace directories
+2. Converts each to WebP using Pillow
+3. Removes original PNG after successful conversion
+4. Reports total savings
 
-Slowest Tests
--------------
-1. Test Full Checkout Flow (45.2s)
-2. Test Data Import (32.1s)
-3. Test Report Generation (28.5s)
-...
+### Typical Savings
 
-Flaky Tests
------------
-- Test Login (2 failures / 10 runs)
-- Test Search (1 failure / 5 runs)
+| Quality | Size Reduction |
+|---------|----------------|
+| 90 | 50-60% |
+| 80 | 60-70% |
+| 70 | 70-80% |
+| 60 | 75-85% |
+
+### Viewer Compatibility
+
+The HTML viewer includes fallback support:
+
+```html
+<img src="screenshot.webp" onerror="this.src='screenshot.png'">
 ```
+
+### Requirements
+
+Requires Pillow: `pip install robotframework-trace-viewer[media]`
+
+---
+
+## Trace Cleanup
+
+Manage storage by removing old traces based on retention policy.
+
+### CLI Usage
+
+```bash
+trace-viewer cleanup ./traces --days 30 --max-traces 100
+```
+
+### Policy Rules
+
+1. **Age-based**: Delete traces with `start_time` older than `--days` days
+2. **Count-based**: Keep only the `--max-traces` most recent traces
+
+Both rules can be combined. Age-based deletion runs first, then count-based.
+
+### Configuration
+
+Set retention policy in config file for consistent behavior:
+
+```yaml
+retention:
+  days: 30
+  max_traces: 100
+```
+
+---
+
+## PDF Export
+
+Export a trace as a professional PDF report.
+
+### CLI Usage
+
+```bash
+trace-viewer export-pdf ./traces/login_test -o report.pdf
+```
+
+### Report Structure
+
+1. **Cover page**: Test name, suite, status, date, duration, tags
+2. **Per-keyword pages**: Screenshot (resized to fit), arguments, variables, status
+3. **Summary page**: Total keywords, pass/fail breakdown
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--screenshots-only` | Include only screenshots, skip variables and metadata |
+
+### Requirements
+
+Requires weasyprint: `pip install robotframework-trace-viewer[pdf]`
+
+Note: weasyprint may require system libraries. See [weasyprint documentation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation) for platform-specific installation.
 
 ---
 
 ## ZIP Export
 
-Export traces as portable ZIP archives for sharing or archiving.
-
-### How It Works
-
-1. The trace directory is compressed into a ZIP file
-2. All files are included (viewer, screenshots, data)
-3. Directory structure is preserved
+Export traces as portable ZIP archives.
 
 ### CLI Usage
 
@@ -463,34 +673,22 @@ Export traces as portable ZIP archives for sharing or archiving.
 trace-viewer export ./traces/test_login_20250120 -o login_trace.zip
 ```
 
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-o, --output` | Output path for ZIP archive |
-
 ### Archive Contents
 
 ```
 login_trace.zip
-├── manifest.json
-├── viewer.html
-└── keywords/
-    ├── 001_open_browser/
-    │   ├── metadata.json
-    │   ├── screenshot.png
-    │   ├── dom.html
-    │   ├── network.json
-    │   ├── console.json
-    │   └── variables.json
-    └── ...
++-- manifest.json
++-- viewer.html
++-- keywords/
+    +-- 001_open_browser/
+    |   +-- metadata.json
+    |   +-- screenshot.png
+    |   +-- dom.html
+    |   +-- network.json
+    |   +-- console.json
+    |   +-- variables.json
+    +-- ...
 ```
-
-### Use Cases
-
-- Share traces with team members
-- Archive traces for later analysis
-- Upload to bug tracking systems
 
 ---
 
@@ -500,59 +698,58 @@ Full support for parallel test execution with Pabot.
 
 ### How It Works
 
-1. Pabot sets environment variables for each worker process
-2. The listener detects these variables automatically
-3. Trace directory names include the worker ID to prevent conflicts
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `PABOTQUEUEINDEX` | Worker queue index (0, 1, 2, ...) |
-| `PABOTEXECUTIONPOOLID` | Execution pool identifier |
-| `PABOT_QUEUE_INDEX` | Alternative queue index variable |
+1. Pabot spawns multiple robot processes
+2. Each process sets environment variables (`PABOTQUEUEINDEX`, etc.)
+3. The trace listener detects these variables
+4. Trace directory names include the worker ID suffix
 
 ### Trace Naming
 
-Standard execution:
-```
-traces/test_login_20250120_143022/
+| Execution Type | Directory Name |
+|----------------|----------------|
+| Standard robot | `test_login_20250120_143022` |
+| Pabot worker 0 | `test_login_20250120_143022_pabot0` |
+| Pabot worker 1 | `test_login_20250120_143022_pabot1` |
+
+### Usage
+
+```bash
+pabot --processes 4 --listener trace_viewer.TraceListener:output_dir=./traces tests/
 ```
 
-Pabot execution:
-```
-traces/test_login_20250120_143022_pabot0/
-traces/test_login_20250120_143022_pabot1/
-```
+---
+
+## Pabot Merge Timeline
+
+Merge parallel traces from multiple Pabot workers into a unified timeline.
 
 ### CLI Usage
 
 ```bash
-# Install Pabot
-pip install robotframework-pabot
-
-# Run tests in parallel
-pabot --processes 4 --listener trace_viewer.TraceListener:output_dir=./traces tests/
+trace-viewer merge ./traces -o merged/
 ```
 
-### Listing Parallel Traces
+### How It Works
 
-```bash
-trace-viewer list ./traces
+1. Scans trace directories for Pabot suffixes (`_pabot0`, `_pabot1`, etc.)
+2. Parses manifest files to extract timing and worker information
+3. Builds a chronological timeline sorted by `start_time`
+4. Generates a Gantt-style HTML visualization
+
+### Timeline View
+
+The timeline shows:
+- Horizontal swimlanes per worker (pabot0, pabot1, etc.)
+- Test bars sized by duration
+- Color coding: green (PASS), red (FAIL)
+- Test names and durations on hover
+
+### Programmatic Usage
+
+```python
+from trace_viewer.integrations.pabot_merger import PabotMerger
+
+merger = PabotMerger(traces_dir)
+traces = merger.scan_traces()
+output_dir = merger.merge(output=Path("merged/"))
 ```
-
-Output:
-```
-Found 8 trace(s):
-  [PASS] Login Test (pabot0)
-      Path: ./traces/login_test_20250120_143022_pabot0
-  [PASS] Login Test (pabot1)
-      Path: ./traces/login_test_20250120_143022_pabot1
-  ...
-```
-
-### Use Cases
-
-- Run large test suites faster
-- Distribute tests across CI workers
-- Maintain trace isolation in parallel runs

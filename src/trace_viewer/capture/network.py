@@ -7,6 +7,7 @@ Supports both SeleniumLibrary (via execute_cdp_cmd) and Browser Library
 (via Playwright's CDP session).
 """
 
+import contextlib
 import time
 from typing import Any, Optional
 
@@ -312,11 +313,86 @@ class NetworkCapture:
             del req["start_time"]
             self._captured_requests.append(req)
 
-    def _capture_from_browser_library(self, browser_lib: Any) -> list[dict[str, Any]]:
-        """Capture network requests from Browser Library.
+    def _get_playwright_page(self, browser_lib: Any) -> Optional[Any]:
+        """Get the Playwright page object from Browser Library.
 
-        Browser Library (Playwright) has different network capture mechanisms.
-        This method attempts to get network activity via Playwright's API.
+        Args:
+            browser_lib: Browser Library instance.
+
+        Returns:
+            Playwright Page object or None.
+        """
+        try:
+            catalog = getattr(browser_lib, "_playwright_state", None)
+            if catalog is None:
+                catalog = getattr(browser_lib, "playwright", None)
+            if catalog is None:
+                return None
+            if hasattr(catalog, "get_current_page"):
+                return catalog.get_current_page()
+        except Exception:
+            pass
+        return None
+
+    def _setup_playwright_listeners(self, page: Any) -> None:
+        """Install request/response event listeners on a Playwright page.
+
+        Args:
+            page: Playwright Page object.
+        """
+        if hasattr(page, "_trace_viewer_listeners_installed"):
+            return
+
+        def on_request(request: Any) -> None:
+            with contextlib.suppress(Exception):
+                self._pending_requests[request.url] = {
+                    "request_id": request.url,
+                    "url": request.url,
+                    "method": request.method,
+                    "request_headers": self._truncate_headers(
+                        dict(request.headers) if request.headers else {}
+                    ),
+                    "resource_type": request.resource_type or "Other",
+                    "timestamp": time.time(),
+                    "start_time": time.time(),
+                    "status": None,
+                    "response_headers": {},
+                    "size": 0,
+                    "duration_ms": 0,
+                }
+
+        def on_response(response: Any) -> None:
+            try:
+                url = response.url
+                if url in self._pending_requests:
+                    req = self._pending_requests.pop(url)
+                    req["status"] = response.status
+                    req["response_headers"] = self._truncate_headers(
+                        dict(response.headers) if response.headers else {}
+                    )
+                    req["duration_ms"] = int((time.time() - req["start_time"]) * 1000)
+                    del req["start_time"]
+                    try:
+                        body = response.body()
+                        req["size"] = len(body) if body else 0
+                    except Exception:
+                        req["size"] = 0
+                    self._captured_requests.append(req)
+            except Exception:
+                pass
+
+        try:
+            page.on("request", on_request)
+            page.on("response", on_response)
+            page._trace_viewer_listeners_installed = True  # type: ignore[attr-defined]
+        except Exception as e:
+            logger.debug(f"Failed to install Playwright network listeners: {e}")
+
+    def _capture_from_browser_library(self, browser_lib: Any) -> list[dict[str, Any]]:
+        """Capture network requests from Browser Library (Playwright).
+
+        Uses Playwright's page.on('request')/page.on('response') events
+        to capture network activity. Listeners are installed lazily on first call.
 
         Args:
             browser_lib: Browser Library instance.
@@ -324,11 +400,17 @@ class NetworkCapture:
         Returns:
             List of captured network request entries.
         """
-        # Browser Library with Playwright handles network differently
-        # Playwright captures via page.on('request')/page.on('response')
-        # For now, return empty as this requires different integration
-        logger.debug("Network capture from Browser Library not yet implemented")
-        return []
+        page = self._get_playwright_page(browser_lib)
+        if page is None:
+            return []
+
+        # Install listeners if not already done
+        self._setup_playwright_listeners(page)
+
+        # Return captured requests and clear
+        requests = list(self._captured_requests)
+        self._captured_requests = []
+        return requests
 
     def _truncate_headers(
         self, headers: dict[str, Any], max_value_length: int = 200

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "robotframework-trace-viewer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Visual trace viewer for Robot Framework test debugging"
 readme = "README.md"
 license = "MIT"
@@ -39,15 +39,20 @@ dependencies = [
     "robotframework>=6.0",
     "selenium>=4.0",
     "click>=8.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
+media = ["Pillow>=9.0"]
+pdf = ["weasyprint>=60.0"]
+all = ["Pillow>=9.0", "weasyprint>=60.0"]
 dev = [
     "pytest>=7.0",
     "pytest-mock>=3.0",
     "black>=23.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
+    "Pillow>=9.0",
 ]
 
 [project.scripts]
@@ -64,7 +69,7 @@ packages = ["src/trace_viewer"]
 
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311", "py312"]
+target-version = ["py39"]
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -124,6 +129,9 @@ strict_concatenate = true
 module = [
     "robot.*",
     "selenium.*",
+    "PIL.*",
+    "weasyprint.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 

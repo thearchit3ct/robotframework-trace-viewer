@@ -558,5 +558,259 @@ def export_rp(
         raise SystemExit(1) from None
 
 
+# =========================================================================
+# v0.3.0 Commands
+# =========================================================================
+
+
+@main.command()
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default="./trace-viewer.yml",
+    help="Output path for the config file.",
+)
+def init(output: str) -> None:
+    """Generate a default trace-viewer.yml configuration file."""
+    from trace_viewer.config import generate_default_config
+
+    output_path = Path(output)
+    if output_path.exists():
+        click.echo(f"Config file already exists: {output_path}", err=True)
+        raise SystemExit(1)
+
+    output_path.write_text(generate_default_config(), encoding="utf-8")
+    click.echo(f"Config file generated: {output_path}")
+
+
+@main.command()
+@click.argument("trace1_path", type=click.Path(exists=True))
+@click.argument("trace2_path", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), default=None)
+@click.option("--open", "-O", "open_browser", is_flag=True, default=False)
+def compare_visual(
+    trace1_path: str, trace2_path: str, output: Optional[str], open_browser: bool
+) -> None:
+    """Compare screenshots between two traces visually (pixel diff)."""
+    try:
+        from trace_viewer.comparison.visual_diff import (
+            compare_traces,
+            generate_comparison_html,
+        )
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        click.echo("Install with: pip install 'robotframework-trace-viewer[media]'", err=True)
+        raise SystemExit(1) from None
+
+    trace1 = Path(trace1_path)
+    trace2 = Path(trace2_path)
+
+    try:
+        click.echo("Computing visual diff...")
+        results = compare_traces(trace1, trace2)
+
+        if not results:
+            click.echo("No matching screenshots found to compare.")
+            return
+
+        # Show summary
+        avg_similarity = sum(r["similarity"] for r in results) / len(results)
+        click.echo(f"\nCompared {len(results)} screenshot(s)")
+        click.echo(f"Average similarity: {avg_similarity:.1%}")
+
+        output_path = Path(output) if output else Path.cwd() / "visual_diff.html"
+        generate_comparison_html(results, trace1, trace2, output_path)
+        click.echo(f"\nVisual diff report: {output_path}")
+
+        if open_browser:
+            webbrowser.open(f"file://{output_path.absolute()}")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option("--output", "-o", type=click.Path(), default=None)
+@click.option("--open", "-O", "open_browser", is_flag=True, default=False)
+def suite(traces_dir: str, output: Optional[str], open_browser: bool) -> None:
+    """Generate a suite-level summary viewer from multiple traces."""
+    from trace_viewer.viewer.suite_generator import SuiteViewerGenerator
+
+    traces_path = Path(traces_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        generator = SuiteViewerGenerator()
+        result_path = generator.generate(traces_path, output_path, open_browser)
+        click.echo(f"Suite viewer generated: {result_path}")
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+    except Exception as e:
+        click.echo(f"Error: Failed to generate suite viewer: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("trace_dir", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(["gif", "html"]),
+    default="html",
+    help="Output format: gif or html slideshow.",
+)
+@click.option("--fps", type=int, default=2, help="Frames per second for GIF.")
+@click.option("--width", type=int, default=800, help="Maximum width in pixels.")
+@click.option("--output", "-o", type=click.Path(), default=None)
+def replay(trace_dir: str, output_format: str, fps: int, width: int, output: Optional[str]) -> None:
+    """Generate a GIF or HTML slideshow replay from trace screenshots."""
+    try:
+        from trace_viewer.media.gif_generator import generate_gif, generate_slideshow
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        click.echo("Install with: pip install 'robotframework-trace-viewer[media]'", err=True)
+        raise SystemExit(1) from None
+
+    trace_path = Path(trace_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        if output_format == "gif":
+            result = generate_gif(trace_path, output_path, fps=fps, max_width=width)
+        else:
+            result = generate_slideshow(trace_path, output_path)
+        click.echo(f"Replay generated: {result}")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option("--days", type=int, default=30, help="Delete traces older than N days.")
+@click.option("--max-traces", type=int, default=100, help="Maximum traces to keep.")
+def cleanup(traces_dir: str, days: int, max_traces: int) -> None:
+    """Clean up old traces based on retention policy."""
+    from trace_viewer.storage.compression import cleanup_traces
+
+    traces_path = Path(traces_dir)
+
+    try:
+        result = cleanup_traces(traces_path, max_days=days, max_traces=max_traces)
+        click.echo(f"Deleted {result['deleted_count']} trace(s)")
+        click.echo(f"Remaining: {result['remaining_count']} trace(s)")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option("--quality", "-q", type=int, default=80, help="WebP quality (1-100).")
+def compress(traces_dir: str, quality: int) -> None:
+    """Compress trace screenshots from PNG to WebP."""
+    try:
+        from trace_viewer.storage.compression import compress_traces_dir
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        click.echo("Install with: pip install 'robotframework-trace-viewer[media]'", err=True)
+        raise SystemExit(1) from None
+
+    traces_path = Path(traces_dir)
+
+    try:
+        result = compress_traces_dir(traces_path, quality=quality)
+        click.echo(f"Converted {result['files_converted']} file(s)")
+        if result["original_size_bytes"] > 0:
+            click.echo(
+                f"Savings: {result['savings_percent']:.1f}% "
+                f"({result['original_size_bytes']:,} -> {result['compressed_size_bytes']:,} bytes)"
+            )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command("export-pdf")
+@click.argument("trace_dir", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), default=None)
+@click.option(
+    "--screenshots-only",
+    is_flag=True,
+    default=False,
+    help="Only include screenshots, skip variables and details.",
+)
+def export_pdf(trace_dir: str, output: Optional[str], screenshots_only: bool) -> None:
+    """Export a trace as a PDF report."""
+    try:
+        from trace_viewer.export.pdf_exporter import PDFExporter
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        click.echo("Install with: pip install 'robotframework-trace-viewer[pdf]'", err=True)
+        raise SystemExit(1) from None
+
+    trace_path = Path(trace_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        exporter = PDFExporter()
+        result = exporter.export(trace_path, output_path, screenshots_only=screenshots_only)
+        click.echo(f"PDF report generated: {result}")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option("--output", "-o", type=click.Path(), default=None)
+def merge(traces_dir: str, output: Optional[str]) -> None:
+    """Merge Pabot parallel traces into a unified timeline."""
+    from trace_viewer.integrations.pabot_merger import PabotMerger
+
+    traces_path = Path(traces_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        merger = PabotMerger(traces_path)
+        result = merger.merge(output_path)
+        click.echo(f"Merged traces: {result}")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
+@main.command()
+@click.argument("traces_dir", type=click.Path(exists=True), default="./traces")
+@click.option(
+    "--format",
+    "-f",
+    "ci_format",
+    type=click.Choice(["jenkins", "gitlab"]),
+    default="jenkins",
+    help="CI/CD platform format.",
+)
+@click.option("--output", "-o", type=click.Path(), default=None)
+def publish(traces_dir: str, ci_format: str, output: Optional[str]) -> None:
+    """Publish traces for CI/CD integration (Jenkins/GitLab)."""
+    from trace_viewer.integrations.cicd import CICDPublisher
+
+    traces_path = Path(traces_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        publisher = CICDPublisher(traces_path, format=ci_format)
+        result = publisher.publish(output_path)
+        click.echo(f"Published traces to: {result}")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from None
+
+
 if __name__ == "__main__":
     main()
