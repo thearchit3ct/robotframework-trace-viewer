@@ -5,6 +5,8 @@ together — from config loading through listener capture to viewer generation,
 compression, export, and CI publishing — mirroring real-world usage scenarios.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
