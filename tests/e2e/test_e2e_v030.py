@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 from PIL import Image
 
@@ -18,7 +17,6 @@ from trace_viewer.cli import main
 from trace_viewer.config import TraceConfig, generate_default_config, load_config
 from trace_viewer.listener import TraceListener
 from trace_viewer.viewer.generator import ViewerGenerator
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -77,7 +75,9 @@ def _run_simulated_test(
         doc="",
         tags=["e2e"],
     )
-    test_result = _mock_result(status=status, message="" if status == "PASS" else "Failed", elapsed_time=1.0)
+    test_result = _mock_result(
+        status=status, message="" if status == "PASS" else "Failed", elapsed_time=1.0
+    )
 
     listener.start_suite(suite_data, suite_result)
     listener.start_test(test_data, test_result)
@@ -190,10 +190,13 @@ class TestConfigToListenerE2E:
         config_file = tmp_path / "trace-viewer.yml"
         config_file.write_text("capture_mode: full\nbuffer_size: 10\n", encoding="utf-8")
 
-        with patch.dict(os.environ, {
-            "TRACE_VIEWER_CAPTURE_MODE": "on_failure",
-            "TRACE_VIEWER_BUFFER_SIZE": "3",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "TRACE_VIEWER_CAPTURE_MODE": "on_failure",
+                "TRACE_VIEWER_BUFFER_SIZE": "3",
+            },
+        ):
             config = load_config(config_path=str(config_file))
             assert config.capture_mode == "on_failure"
             assert config.buffer_size == 3
@@ -259,7 +262,9 @@ class TestRingBufferOnFailureE2E:
         # Add keywords - buffer should store them in memory
         for i in range(3):
             kw = _mock_data(name=f"Step {i}", args=(), assign=(), libname="BuiltIn", type="KEYWORD")
-            kw_result = _mock_result(status="PASS" if i < 2 else "FAIL", message="", elapsed_time=0.1)
+            kw_result = _mock_result(
+                status="PASS" if i < 2 else "FAIL", message="", elapsed_time=0.1
+            )
             listener.start_keyword(kw, kw_result)
             listener.end_keyword(kw, kw_result)
 
@@ -317,9 +322,15 @@ class TestSuiteViewerE2E:
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()
 
-        _create_trace_with_screenshots(traces_dir, "Login Test", "PASS", start_time="2025-01-20T10:00:00+00:00")
-        _create_trace_with_screenshots(traces_dir, "Checkout Test", "FAIL", start_time="2025-01-20T10:01:00+00:00")
-        _create_trace_with_screenshots(traces_dir, "Search Test", "PASS", start_time="2025-01-20T10:02:00+00:00")
+        _create_trace_with_screenshots(
+            traces_dir, "Login Test", "PASS", start_time="2025-01-20T10:00:00+00:00"
+        )
+        _create_trace_with_screenshots(
+            traces_dir, "Checkout Test", "FAIL", start_time="2025-01-20T10:01:00+00:00"
+        )
+        _create_trace_with_screenshots(
+            traces_dir, "Search Test", "PASS", start_time="2025-01-20T10:02:00+00:00"
+        )
 
         runner = CliRunner()
         output = tmp_path / "suite.html"
@@ -400,12 +411,16 @@ class TestCleanupE2E:
 
         # Create an "old" trace (400 days ago)
         _create_trace_with_screenshots(
-            traces_dir, "Old Test", "PASS",
+            traces_dir,
+            "Old Test",
+            "PASS",
             start_time="2024-01-01T10:00:00+00:00",
         )
         # Create a "recent" trace
         _create_trace_with_screenshots(
-            traces_dir, "Recent Test", "PASS",
+            traces_dir,
+            "Recent Test",
+            "PASS",
             start_time="2026-03-29T10:00:00+00:00",
         )
 
@@ -449,7 +464,9 @@ class TestGifReplayE2E:
 
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir()
-        trace_dir = _create_trace_with_screenshots(traces_dir, "Slideshow Test", "PASS", num_keywords=3)
+        trace_dir = _create_trace_with_screenshots(
+            traces_dir, "Slideshow Test", "PASS", num_keywords=3
+        )
 
         html_path = generate_slideshow(trace_dir)
         assert html_path.exists()
@@ -479,7 +496,9 @@ class TestGifReplayE2E:
 
         runner = CliRunner()
         output = tmp_path / "output.gif"
-        result = runner.invoke(main, ["replay", str(trace_dir), "--format", "gif", "--output", str(output)])
+        result = runner.invoke(
+            main, ["replay", str(trace_dir), "--format", "gif", "--output", str(output)]
+        )
         assert result.exit_code == 0
         assert output.exists()
 
@@ -544,7 +563,9 @@ class TestVisualDiffE2E:
 
         runner = CliRunner()
         output = tmp_path / "visual_diff.html"
-        result = runner.invoke(main, ["compare-visual", str(trace1), str(trace2), "--output", str(output)])
+        result = runner.invoke(
+            main, ["compare-visual", str(trace1), str(trace2), "--output", str(output)]
+        )
         assert result.exit_code == 0
 
 
@@ -559,19 +580,25 @@ class TestPabotMergeE2E:
         traces_dir.mkdir()
 
         _create_trace_with_screenshots(
-            traces_dir, "Login Test", "PASS",
+            traces_dir,
+            "Login Test",
+            "PASS",
             start_time="2025-01-20T10:00:00+00:00",
             duration_ms=3000,
             pabot_suffix="pabot0",
         )
         _create_trace_with_screenshots(
-            traces_dir, "Checkout Test", "FAIL",
+            traces_dir,
+            "Checkout Test",
+            "FAIL",
             start_time="2025-01-20T10:00:01+00:00",
             duration_ms=4000,
             pabot_suffix="pabot1",
         )
         _create_trace_with_screenshots(
-            traces_dir, "Search Test", "PASS",
+            traces_dir,
+            "Search Test",
+            "PASS",
             start_time="2025-01-20T10:00:03+00:00",
             duration_ms=2000,
             pabot_suffix="pabot0",
@@ -603,10 +630,16 @@ class TestPabotMergeE2E:
         traces_dir.mkdir()
 
         _create_trace_with_screenshots(
-            traces_dir, "Test A", "PASS", pabot_suffix="pabot0",
+            traces_dir,
+            "Test A",
+            "PASS",
+            pabot_suffix="pabot0",
         )
         _create_trace_with_screenshots(
-            traces_dir, "Test B", "PASS", pabot_suffix="pabot1",
+            traces_dir,
+            "Test B",
+            "PASS",
+            pabot_suffix="pabot1",
         )
 
         runner = CliRunner()
@@ -675,7 +708,9 @@ class TestCICDPublishE2E:
 
         runner = CliRunner()
         output = tmp_path / "ci_out"
-        result = runner.invoke(main, ["publish", str(traces_dir), "--format", "jenkins", "--output", str(output)])
+        result = runner.invoke(
+            main, ["publish", str(traces_dir), "--format", "jenkins", "--output", str(output)]
+        )
         assert result.exit_code == 0
 
     def test_publish_cli_gitlab(self, tmp_path):
@@ -686,7 +721,9 @@ class TestCICDPublishE2E:
 
         runner = CliRunner()
         output = tmp_path / "gl_out"
-        result = runner.invoke(main, ["publish", str(traces_dir), "--format", "gitlab", "--output", str(output)])
+        result = runner.invoke(
+            main, ["publish", str(traces_dir), "--format", "gitlab", "--output", str(output)]
+        )
         assert result.exit_code == 0
 
 
@@ -770,8 +807,11 @@ class TestFullPipelineE2E:
 
         for name, status, time in test_scenarios:
             _create_trace_with_screenshots(
-                traces_dir, name, status,
-                start_time=time, num_keywords=4,
+                traces_dir,
+                name,
+                status,
+                start_time=time,
+                num_keywords=4,
             )
 
         # Step 3: Compress screenshots
@@ -811,8 +851,9 @@ class TestFullPipelineE2E:
         )
 
         # Passing test
-        _run_simulated_test(listener, "Pass Test", status="PASS",
-                            keywords=[("Log", "BuiltIn", "PASS")])
+        _run_simulated_test(
+            listener, "Pass Test", status="PASS", keywords=[("Log", "BuiltIn", "PASS")]
+        )
 
         # Failing test
         suite_data = _mock_data(name="Suite", source=None)
