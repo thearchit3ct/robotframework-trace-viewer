@@ -489,8 +489,7 @@ def generate_comparison_html(
 
         kw_id = f"kw-{entry['index']:03d}"
 
-        keyword_sections.append(
-            f"""
+        keyword_sections.append(f"""
     <section class="kw-section" id="{kw_id}">
       <div class="kw-header">
         <span class="kw-index">#{entry['index']:03d}</span>
@@ -529,8 +528,7 @@ def generate_comparison_html(
           </div>
         </div>
       </div>
-    </section>"""
-        )
+    </section>""")
 
     keywords_html = (
         "\n".join(keyword_sections)
