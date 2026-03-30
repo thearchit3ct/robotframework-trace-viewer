@@ -751,11 +751,11 @@ class TestPDFExportE2E:
         mock_html_cls.return_value = mock_html_instance
         mock_wp.HTML = mock_html_cls
 
+        from importlib import reload
+
+        import trace_viewer.export.pdf_exporter as pdf_mod
+
         with patch.dict(sys.modules, {"weasyprint": mock_wp}):
-            from importlib import reload
-
-            import trace_viewer.export.pdf_exporter as pdf_mod
-
             reload(pdf_mod)
 
             exporter = pdf_mod.PDFExporter()
@@ -764,17 +764,33 @@ class TestPDFExportE2E:
             assert result.exists()
             assert result.read_bytes().startswith(b"%PDF")
 
+        # Reload to remove mock contamination for subsequent tests
+        reload(pdf_mod)
+
     def test_pdf_export_cli(self, tmp_path):
         """trace-viewer export-pdf CLI raises gracefully without weasyprint."""
-        traces_dir = tmp_path / "traces"
-        traces_dir.mkdir()
-        trace_dir = _create_trace_with_screenshots(traces_dir, "PDF CLI", "PASS")
+        import sys
+        from importlib import reload
 
-        runner = CliRunner()
-        # This should fail gracefully if weasyprint is not installed
-        result = runner.invoke(main, ["export-pdf", str(trace_dir)])
-        # Either succeeds or gives a helpful error about weasyprint
-        assert result.exit_code == 0 or "weasyprint" in result.output.lower()
+        # Clean up any mock weasyprint injected by unit tests
+        saved = sys.modules.pop("weasyprint", None)
+        import trace_viewer.export.pdf_exporter as pdf_mod
+
+        reload(pdf_mod)
+
+        try:
+            traces_dir = tmp_path / "traces"
+            traces_dir.mkdir()
+            trace_dir = _create_trace_with_screenshots(traces_dir, "PDF CLI", "PASS")
+
+            runner = CliRunner()
+            # This should fail gracefully if weasyprint is not installed
+            result = runner.invoke(main, ["export-pdf", str(trace_dir)])
+            # Either succeeds or gives a helpful error about weasyprint
+            assert result.exit_code == 0 or "weasyprint" in result.output.lower()
+        finally:
+            if saved is not None:
+                sys.modules["weasyprint"] = saved
 
 
 class TestFullPipelineE2E:
