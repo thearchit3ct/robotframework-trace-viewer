@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-30
+
+### Added
+
+#### Configuration & Masking (F8, F9)
+- **Config File Support**: `trace-viewer.yml` configuration file
+  - Auto-discovery: `./trace-viewer.yml` then `~/.trace-viewer.yml`
+  - Full precedence chain: CLI args > env vars > config file > defaults
+  - Environment variables: `TRACE_VIEWER_*` prefix for all settings
+  - CLI command: `trace-viewer init` generates default config with comments
+- **Custom Masking Patterns**: Configurable sensitive data patterns
+  - Define patterns in `trace-viewer.yml` under `masking_patterns`
+  - Patterns compiled as regex once at startup for performance
+  - Default patterns: password, secret, token, key, credential, auth, api_key
+
+#### Capture Enhancements (F1, F6, F10)
+- **Ring Buffer On-Failure Mode**: Smart capture for CI efficiency
+  - In `on_failure` mode, captures are stored in-memory ring buffer (~1MB for 10 keywords)
+  - Passing tests: buffer cleared, zero disk I/O
+  - Failing tests: buffer flushed to disk with full data
+  - Configurable buffer size via `buffer_size` setting
+- **Full-Page Screenshots**: Capture entire scrollable page
+  - Selenium: CDP `Page.captureScreenshot` with `captureBeyondViewport`
+  - Browser Library: Playwright `page.screenshot(full_page=True)`
+  - Automatic fallback to viewport if full-page fails
+  - Configurable via `screenshot_mode: full_page`
+- **Browser Library Network Capture**: Native Playwright network monitoring
+  - Captures requests/responses via Playwright page events
+  - Same output format as CDP-based capture
+  - Automatic detection of Browser Library
+
+#### Viewer Enhancements (F5, F4)
+- **Search & Filter in Viewer**: Find keywords quickly
+  - Text search input above keyword list
+  - Status dropdown filter: ALL / PASS / FAIL / SKIP
+  - Keyboard shortcuts: `/` to focus search, `Escape` to clear
+  - Result counter display
+- **Suite-Level Summary Viewer**: Aggregate view of multiple tests
+  - Stats bar: total, passed, failed counts with pass rate
+  - Sidebar with test list (name, status, duration)
+  - Click-through to individual test viewers
+  - CLI command: `trace-viewer suite <traces_dir>`
+
+#### Media & Comparison (F2, F3)
+- **GIF Replay**: Animate trace screenshots
+  - `generate_gif()`: Creates animated GIF from screenshots
+  - `generate_slideshow()`: HTML with play/pause/step controls
+  - Configurable FPS and max width
+  - CLI command: `trace-viewer replay <trace> [--format gif|html]`
+  - Requires: `pip install robotframework-trace-viewer[media]`
+- **Visual Diff**: Pixel-level screenshot comparison
+  - Pixel-by-pixel comparison via Pillow (no OpenCV dependency)
+  - Red overlay on changed pixels with configurable threshold
+  - Similarity score (0.0 - 1.0) and changed pixel count
+  - HTML report: 3 panels (Baseline, Candidate, Diff) with slider
+  - CLI command: `trace-viewer compare-visual <trace1> <trace2>`
+  - Requires: `pip install robotframework-trace-viewer[media]`
+
+#### Storage & Compression (F7)
+- **WebP Compression**: Significant storage savings
+  - PNG to WebP conversion: 60-80% size reduction
+  - Configurable quality (1-100)
+  - Viewer fallback: `<img onerror>` for backward compatibility
+  - CLI command: `trace-viewer compress <dir> [--quality 80]`
+  - Requires: `pip install robotframework-trace-viewer[media]`
+- **Trace Cleanup**: Retention policy enforcement
+  - Delete traces older than N days
+  - Cap total number of traces
+  - CLI command: `trace-viewer cleanup <dir> [--days 30] [--max-traces 100]`
+- **DOM Truncation**: Configurable `max_dom_size_kb` to limit snapshot size
+
+#### Export & Integrations (F11, F12, F13)
+- **PDF Export**: Professional trace reports
+  - Cover page with test info, status, date
+  - One page per keyword with screenshot, args, variables
+  - Option `--screenshots-only` for compact reports
+  - CLI command: `trace-viewer export-pdf <trace> [-o report.pdf]`
+  - Requires: `pip install robotframework-trace-viewer[pdf]`
+- **Pabot Merge**: Unified timeline for parallel traces
+  - Scans Pabot worker directories (`_pabot0`, `_pabot1`, etc.)
+  - Generates Gantt-style timeline HTML with swimlanes per worker
+  - Chronological ordering by start time
+  - CLI command: `trace-viewer merge <traces_dir> [-o merged/]`
+- **CI/CD Publishing**: Platform-specific output generation
+  - **Jenkins**: `index.html` compatible with HTML Publisher Plugin
+  - **GitLab**: `trace-summary.md` for merge request comments
+  - CI mode flag for listener: `ci_mode: true` in config
+  - CLI command: `trace-viewer publish <dir> [--format jenkins|gitlab]`
+
+### Changed
+- Listener `__init__` now accepts `screenshot_mode`, `buffer_size`, and `config` parameters
+- Viewer HTML now includes search bar and status filter dropdown
+- Dependencies: added `pyyaml>=6.0` as required dependency
+
+### New CLI Commands
+- `trace-viewer init` - Generate default config file
+- `trace-viewer suite` - Generate suite-level summary viewer
+- `trace-viewer replay` - Generate GIF or HTML slideshow
+- `trace-viewer compare-visual` - Pixel-level screenshot comparison
+- `trace-viewer compress` - Convert PNG screenshots to WebP
+- `trace-viewer cleanup` - Remove old traces by retention policy
+- `trace-viewer export-pdf` - Export trace as PDF report
+- `trace-viewer merge` - Merge Pabot parallel traces
+- `trace-viewer publish` - Publish for Jenkins or GitLab
+
+### New Optional Dependencies
+- `Pillow>=9.0` (extra: `media`) - GIF, visual diff, WebP compression
+- `weasyprint>=60.0` (extra: `pdf`) - PDF export
+
 ## [0.2.0] - 2025-01-20
 
 ### Added
@@ -134,7 +243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Robot Framework 6.0+, 7.0+
 - SeleniumLibrary 6.0+
 
-[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/thearchit3ct/robotframework-trace-viewer/compare/v0.1.1...v0.1.2

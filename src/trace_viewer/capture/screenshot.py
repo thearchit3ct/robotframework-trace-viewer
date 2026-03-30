@@ -47,12 +47,15 @@ class ScreenshotCapture:
         InvalidSessionIdException,
     )
 
-    def __init__(self) -> None:
+    def __init__(self, screenshot_mode: str = "viewport") -> None:
         """Initialize the screenshot capture instance.
 
-        The BuiltIn library instance is lazily loaded on first access.
+        Args:
+            screenshot_mode: Screenshot mode - 'viewport' or 'full_page'.
+                Full-page uses CDP for Selenium or Playwright's full_page option.
         """
         self._builtin: Optional[BuiltIn] = None
+        self._screenshot_mode = screenshot_mode
 
     @property
     def builtin(self) -> BuiltIn:
@@ -111,7 +114,7 @@ class ScreenshotCapture:
         """Capture a screenshot using Browser Library (Playwright).
 
         This method uses Browser Library's internal Playwright page to capture
-        a screenshot. It provides full-page screenshot support.
+        a screenshot. Supports both viewport and full-page modes.
 
         Returns:
             Optional[bytes]: PNG image data as bytes if capture succeeds,
@@ -137,7 +140,8 @@ class ScreenshotCapture:
                 return None
 
             # Playwright's page.screenshot() returns bytes directly
-            return page.screenshot(type="png")  # type: ignore[no-any-return]
+            full_page = self._screenshot_mode == "full_page"
+            return page.screenshot(type="png", full_page=full_page)  # type: ignore[no-any-return]
         except Exception:
             return None
 
@@ -175,6 +179,10 @@ class ScreenshotCapture:
     def capture_from_selenium(self) -> Optional[bytes]:
         """Capture a screenshot using SeleniumLibrary.
 
+        Supports both viewport and full-page modes. Full-page mode uses
+        CDP's Page.captureScreenshot with captureBeyondViewport for
+        Chrome/Chromium/Edge. Falls back to viewport if CDP fails.
+
         Returns:
             Optional[bytes]: PNG image data as bytes if capture succeeds,
                 None if capture fails for any reason.
@@ -183,9 +191,42 @@ class ScreenshotCapture:
         if driver is None:
             return None
         try:
+            if self._screenshot_mode == "full_page":
+                return self._capture_full_page_selenium(driver)
             return driver.get_screenshot_as_png()
         except self.BROWSER_CLOSED_EXCEPTIONS:
             return None
+        except Exception:
+            return None
+
+    def _capture_full_page_selenium(self, driver: WebDriver) -> Optional[bytes]:
+        """Capture a full-page screenshot via CDP for Selenium.
+
+        Uses Page.captureScreenshot with captureBeyondViewport for Chrome-based
+        browsers. Falls back to standard viewport capture on failure.
+
+        Args:
+            driver: Selenium WebDriver instance.
+
+        Returns:
+            PNG bytes or None.
+        """
+        import base64
+
+        try:
+            browser_name = driver.capabilities.get("browserName", "").lower()
+            if browser_name in ("chrome", "chromium", "msedge", "edge"):
+                result = driver.execute_cdp_cmd(  # type: ignore[attr-defined]
+                    "Page.captureScreenshot",
+                    {"captureBeyondViewport": True, "fromSurface": True},
+                )
+                if result and "data" in result:
+                    return base64.b64decode(result["data"])
+        except Exception:
+            pass
+        # Fallback to viewport screenshot
+        try:
+            return driver.get_screenshot_as_png()
         except Exception:
             return None
 

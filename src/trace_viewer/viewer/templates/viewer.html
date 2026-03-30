@@ -671,6 +671,71 @@
             font-size: 0.875rem;
         }
 
+        /* Search bar (F5) */
+        .search-bar {
+            padding: 8px 16px 10px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .search-bar-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 5px 8px;
+            font-size: 0.8125rem;
+            font-family: inherit;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            min-width: 0;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-input:focus {
+            border-color: #6b7280;
+            box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.15);
+            background: var(--bg-primary);
+        }
+
+        .status-filter {
+            padding: 5px 6px;
+            font-size: 0.8125rem;
+            font-family: inherit;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-primary);
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .status-filter:focus {
+            border-color: #6b7280;
+        }
+
+        .results-counter {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            padding: 0 2px;
+        }
+
+        .results-counter.no-results {
+            color: var(--color-fail);
+        }
+
         /* Keyboard hints */
         .keyboard-hints {
             position: fixed;
@@ -753,6 +818,25 @@
             <div class="sidebar-header">
                 Keywords (<span id="keywords-count">0</span>)
             </div>
+            <div class="search-bar" id="search-bar">
+                <div class="search-bar-row">
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="search-input"
+                        placeholder="Search keywords... (/)"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                    <select class="status-filter" id="status-filter" title="Filter by status">
+                        <option value="ALL">ALL</option>
+                        <option value="PASS">PASS</option>
+                        <option value="FAIL">FAIL</option>
+                        <option value="SKIP">SKIP</option>
+                    </select>
+                </div>
+                <span class="results-counter" id="results-counter"></span>
+            </div>
             <ul class="keyword-list" id="keyword-list"></ul>
         </aside>
 
@@ -797,6 +881,8 @@
     <div class="keyboard-hints">
         <span class="keyboard-hint"><kbd>&#8593;</kbd> / <kbd>&#8595;</kbd> Navigate</span>
         <span class="keyboard-hint"><kbd>Enter</kbd> Select</span>
+        <span class="keyboard-hint"><kbd>/</kbd> Search</span>
+        <span class="keyboard-hint"><kbd>Esc</kbd> Clear</span>
     </div>
 
     <script>
@@ -900,6 +986,8 @@
                 const li = document.createElement('li');
                 li.className = 'keyword-item';
                 li.dataset.index = index;
+                li.dataset.name = (keyword.name || '').toLowerCase();
+                li.dataset.status = (keyword.status || 'NOT_RUN').toUpperCase();
 
                 const level = keyword.level || 0;
                 li.style.setProperty('--level', level);
@@ -1293,11 +1381,84 @@
             }
 
             /**
+             * Filter keyword list items based on search text and status dropdown.
+             * Shows/hides .keyword-item elements and updates the results counter.
+             */
+            function filterKeywords() {
+                const searchInput = document.getElementById('search-input');
+                const statusFilter = document.getElementById('status-filter');
+                const resultsCounter = document.getElementById('results-counter');
+
+                if (!searchInput || !statusFilter || !resultsCounter) return;
+
+                const query = searchInput.value.trim().toLowerCase();
+                const selectedStatus = statusFilter.value;
+                const items = elements.keywordList.querySelectorAll('.keyword-item');
+                let visibleCount = 0;
+
+                items.forEach(item => {
+                    const nameMatch = query === '' || item.dataset.name.includes(query);
+                    const itemStatus = item.dataset.status || '';
+                    const statusMatch = selectedStatus === 'ALL' || itemStatus === selectedStatus;
+                    const visible = nameMatch && statusMatch;
+
+                    item.style.display = visible ? '' : 'none';
+                    if (visible) visibleCount++;
+                });
+
+                const total = items.length;
+                if (query !== '' || selectedStatus !== 'ALL') {
+                    resultsCounter.textContent = `${visibleCount} / ${total} keywords`;
+                    resultsCounter.className = visibleCount === 0
+                        ? 'results-counter no-results'
+                        : 'results-counter';
+                } else {
+                    resultsCounter.textContent = '';
+                    resultsCounter.className = 'results-counter';
+                }
+            }
+
+            /**
+             * Initialize search bar: attach event listeners and keyboard shortcuts.
+             * - Input event on text field triggers filterKeywords()
+             * - Change event on status dropdown triggers filterKeywords()
+             * - `/` key focuses the search input (when not already focused on an input)
+             * - `Escape` key clears and blurs the search input
+             */
+            function initializeSearch() {
+                const searchInput = document.getElementById('search-input');
+                const statusFilter = document.getElementById('status-filter');
+
+                if (!searchInput || !statusFilter) return;
+
+                searchInput.addEventListener('input', filterKeywords);
+                statusFilter.addEventListener('change', filterKeywords);
+
+                // `/` focuses the search input; `Escape` clears it
+                document.addEventListener('keydown', function(event) {
+                    const tag = document.activeElement ? document.activeElement.tagName : '';
+                    const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+                    if (event.key === '/' && !isEditable) {
+                        event.preventDefault();
+                        searchInput.focus();
+                        searchInput.select();
+                    } else if (event.key === 'Escape' && document.activeElement === searchInput) {
+                        searchInput.value = '';
+                        statusFilter.value = 'ALL';
+                        filterKeywords();
+                        searchInput.blur();
+                    }
+                });
+            }
+
+            /**
              * Initialize the application
              */
             function initialize() {
                 initializeHeader();
                 initializeKeywordList();
+                initializeSearch();
 
                 // Set up keyboard navigation
                 document.addEventListener('keydown', handleKeyboard);

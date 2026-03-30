@@ -411,7 +411,7 @@ class TestBrowserLibrarySupport:
         assert result.startswith(b"\x89PNG")
         # Verify screenshot was called with correct params
         mock_browser_library._playwright_state.get_current_page().screenshot.assert_called_once_with(
-            type="png"
+            type="png", full_page=False
         )
 
     def test_capture_from_browser_library_uses_playwright_attr_fallback(

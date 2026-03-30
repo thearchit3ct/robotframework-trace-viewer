@@ -6,7 +6,9 @@ This guide covers integrations with external tools and services.
 
 - [ReportPortal](#reportportal)
 - [Pabot (Parallel Execution)](#pabot-parallel-execution)
+- [Pabot Merge Timeline](#pabot-merge-timeline)
 - [CI/CD Integration](#cicd-integration)
+- [CI/CD Publishing](#cicd-publishing)
 - [Browser Libraries](#browser-libraries)
 
 ---
@@ -59,8 +61,6 @@ trace-viewer export-rp ./traces
 
 ### Hierarchy Mapping
 
-Robot Framework concepts are mapped to ReportPortal as follows:
-
 | Robot Framework | ReportPortal | Description |
 |-----------------|--------------|-------------|
 | Trace export session | Launch | Container for all tests |
@@ -69,81 +69,23 @@ Robot Framework concepts are mapped to ReportPortal as follows:
 | Screenshot | Attachment | Uploaded as log attachment |
 | Tags | Attributes | Key-value pairs on test |
 
-### Attributes
-
-The following attributes are automatically added to tests:
-
-| Attribute | Source |
-|-----------|--------|
-| `suite` | Suite name from manifest |
-| `tag` | Each tag from test tags |
-| `rf_version` | Robot Framework version |
-
 ### Programmatic Usage
-
-You can also use the exporter directly in Python:
 
 ```python
 from trace_viewer.integrations import ReportPortalExporter
 
-# Create exporter
 exporter = ReportPortalExporter(
     endpoint="https://reportportal.example.com",
     project="my_project",
     api_key="your-api-key-uuid",
     launch_name="Nightly Tests",
-    launch_description="Automated test run",
 )
 
-# Export single trace
-result = exporter.export_trace(
-    trace_dir=Path("./traces/test_login_20250120"),
-    include_screenshots=True,
-)
-print(f"Test UUID: {result['test_uuid']}")
-
-# Export all traces in directory
 results = exporter.export_traces(
     traces_dir=Path("./traces"),
     include_screenshots=True,
 )
 print(f"Exported: {results['exported']}/{results['total']}")
-```
-
-### Launch Management
-
-By default, a new launch is created for each export. For more control:
-
-```python
-# Manual launch management
-exporter.start_launch(
-    name="Release 2.0 Tests",
-    description="Full regression suite",
-    attributes=[
-        {"key": "version", "value": "2.0.0"},
-        {"key": "environment", "value": "staging"},
-    ],
-)
-
-# Export multiple traces to same launch
-for trace_dir in trace_dirs:
-    exporter.export_trace(trace_dir)
-
-# Finish launch
-exporter.finish_launch()
-```
-
-### Error Handling
-
-```python
-try:
-    exporter.export_traces(traces_dir)
-except ImportError:
-    print("Install reportportal-client: pip install reportportal-client")
-except FileNotFoundError as e:
-    print(f"Trace not found: {e}")
-except Exception as e:
-    print(f"Export failed: {e}")
 ```
 
 ### Troubleshooting
@@ -196,29 +138,48 @@ pabot --processes 4 --listener trace_viewer.TraceListener:output_dir=./traces te
 | `PABOT_QUEUE_INDEX` | Alternative index variable |
 | `PABOTEXECUTIONPOOLID` | Execution pool identifier |
 
-### Collecting Results
+---
 
-After parallel execution, all traces are in the same directory:
+## Pabot Merge Timeline
 
-```bash
-trace-viewer list ./traces
-```
+After parallel execution, merge all Pabot traces into a unified Gantt-style timeline.
 
-```
-Found 8 trace(s):
-  [PASS] Login Test (pabot0) - 2.5s
-  [PASS] Login Test (pabot1) - 2.6s
-  [PASS] Checkout Test (pabot0) - 3.2s
-  [PASS] Checkout Test (pabot1) - 3.1s
-  ...
-```
-
-### Statistics Across Workers
-
-Generate combined statistics:
+### CLI Usage
 
 ```bash
-trace-viewer stats ./traces -o parallel_results.html
+# After parallel test execution
+pabot --processes 4 --listener trace_viewer.TraceListener:output_dir=./traces tests/
+
+# Merge traces into timeline
+trace-viewer merge ./traces -o merged/
+```
+
+### What It Produces
+
+The merge command creates a directory with:
+
+- `timeline.html`: Interactive Gantt chart with swimlanes per worker
+- `manifest.json`: Aggregated metadata from all traces
+- Links to individual trace viewers
+
+### Timeline Features
+
+- Horizontal swimlanes per Pabot worker (pabot0, pabot1, etc.)
+- Test bars sized proportionally to duration
+- Color coding: green (PASS), red (FAIL)
+- Test names and durations on hover
+- Chronological ordering by start time
+
+### Programmatic Usage
+
+```python
+from trace_viewer.integrations.pabot_merger import PabotMerger
+
+merger = PabotMerger(traces_dir)
+traces = merger.scan_traces()
+# traces: [{"test_name": "Login", "worker_id": "pabot0", "start_time": ..., "duration_ms": ...}]
+
+output_dir = merger.merge(output=Path("merged/"))
 ```
 
 ---
@@ -250,16 +211,18 @@ jobs:
       - name: Install dependencies
         run: |
           pip install robotframework robotframework-seleniumlibrary
-          pip install robotframework-trace-viewer
+          pip install robotframework-trace-viewer[media]
 
       - name: Run tests with traces
         run: |
-          robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+          robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
 
-      - name: Generate statistics
+      - name: Generate reports
         if: always()
         run: |
-          trace-viewer stats ./traces -o traces/dashboard.html
+          trace-viewer compress ./traces --quality 80
+          trace-viewer suite ./traces -o traces/suite.html
+          trace-viewer publish ./traces --format jenkins -o trace-reports/
 
       - name: Upload traces
         if: always()
@@ -294,8 +257,10 @@ test:
     - selenium/standalone-chrome:latest
   variables:
     SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
+    TRACE_VIEWER_CAPTURE_MODE: on_failure
   script:
-    - pip install robotframework robotframework-seleniumlibrary robotframework-trace-viewer
+    - pip install robotframework robotframework-seleniumlibrary
+    - pip install robotframework-trace-viewer[media]
     - robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
   artifacts:
     when: always
@@ -309,27 +274,16 @@ report:
   needs:
     - test
   script:
-    - pip install robotframework-trace-viewer
-    - trace-viewer stats ./traces -o traces/dashboard.html
+    - pip install robotframework-trace-viewer[media]
+    - trace-viewer compress ./traces --quality 80
+    - trace-viewer suite ./traces -o traces/suite.html
+    - trace-viewer publish ./traces --format gitlab -o trace-reports/
+    - cat trace-reports/trace-summary.md
   artifacts:
     when: always
     paths:
-      - traces/dashboard.html
-
-reportportal:
-  stage: report
-  image: python:3.11
-  needs:
-    - test
-  variables:
-    RP_ENDPOINT: $RP_ENDPOINT
-    RP_PROJECT: $RP_PROJECT
-    RP_API_KEY: $RP_API_KEY
-  script:
-    - pip install robotframework-trace-viewer reportportal-client
-    - trace-viewer export-rp ./traces -n "Pipeline $CI_PIPELINE_ID"
-  only:
-    - main
+      - traces/suite.html
+      - trace-reports/
 ```
 
 ### Jenkins
@@ -345,7 +299,7 @@ pipeline {
                     python -m venv venv
                     . venv/bin/activate
                     pip install robotframework robotframework-seleniumlibrary
-                    pip install robotframework-trace-viewer
+                    pip install robotframework-trace-viewer[media]
                 '''
             }
         }
@@ -354,40 +308,23 @@ pipeline {
             steps {
                 sh '''
                     . venv/bin/activate
-                    robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+                    robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
                 '''
             }
             post {
                 always {
                     sh '''
                         . venv/bin/activate
-                        trace-viewer stats ./traces -o traces/dashboard.html
+                        trace-viewer compress ./traces --quality 80
+                        trace-viewer suite ./traces -o traces/suite.html
+                        trace-viewer publish ./traces --format jenkins -o trace-reports/
                     '''
                     archiveArtifacts artifacts: 'traces/**/*', allowEmptyArchive: true
                     publishHTML([
-                        reportDir: 'traces',
-                        reportFiles: 'dashboard.html',
-                        reportName: 'Test Statistics'
+                        reportDir: 'trace-reports',
+                        reportFiles: 'index.html',
+                        reportName: 'Trace Report'
                     ])
-                }
-            }
-        }
-
-        stage('Report') {
-            when {
-                branch 'main'
-            }
-            steps {
-                withCredentials([
-                    string(credentialsId: 'rp-endpoint', variable: 'RP_ENDPOINT'),
-                    string(credentialsId: 'rp-project', variable: 'RP_PROJECT'),
-                    string(credentialsId: 'rp-api-key', variable: 'RP_API_KEY')
-                ]) {
-                    sh '''
-                        . venv/bin/activate
-                        pip install reportportal-client
-                        trace-viewer export-rp ./traces -n "Build ${BUILD_NUMBER}"
-                    '''
                 }
             }
         }
@@ -411,17 +348,19 @@ steps:
 
   - script: |
       pip install robotframework robotframework-seleniumlibrary
-      pip install robotframework-trace-viewer
+      pip install robotframework-trace-viewer[media]
     displayName: 'Install dependencies'
 
   - script: |
-      robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+      robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
     displayName: 'Run tests'
     continueOnError: true
 
   - script: |
-      trace-viewer stats ./traces -o traces/dashboard.html
-    displayName: 'Generate statistics'
+      trace-viewer compress ./traces --quality 80
+      trace-viewer suite ./traces -o traces/suite.html
+      trace-viewer publish ./traces --format jenkins -o trace-reports/
+    displayName: 'Generate reports'
     condition: always()
 
   - task: PublishBuildArtifacts@1
@@ -429,17 +368,56 @@ steps:
       pathToPublish: 'traces'
       artifactName: 'test-traces'
     condition: always()
-
-  - script: |
-      pip install reportportal-client
-      trace-viewer export-rp ./traces -n "Build $(Build.BuildNumber)"
-    displayName: 'Export to ReportPortal'
-    condition: and(always(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-    env:
-      RP_ENDPOINT: $(RP_ENDPOINT)
-      RP_PROJECT: $(RP_PROJECT)
-      RP_API_KEY: $(RP_API_KEY)
 ```
+
+---
+
+## CI/CD Publishing
+
+The `trace-viewer publish` command generates platform-specific output for CI systems.
+
+### Jenkins Publishing
+
+```bash
+trace-viewer publish ./traces --format jenkins -o trace-reports/
+```
+
+Creates `trace-reports/index.html` with:
+- Summary stats (total, passed, failed, pass rate)
+- Test table with status, duration, and links to viewers
+- Compatible with Jenkins HTML Publisher Plugin
+
+### GitLab Publishing
+
+```bash
+trace-viewer publish ./traces --format gitlab -o trace-reports/
+```
+
+Creates `trace-reports/trace-summary.md` with:
+- Markdown table with test results
+- Status icons (checkmark/cross)
+- Summary line with pass/fail counts
+- Suitable for posting as MR comments
+
+### CI Mode
+
+Enable CI-optimized behavior in the listener:
+
+```yaml
+# trace-viewer.yml
+ci_mode: true
+```
+
+Or via environment variable:
+
+```bash
+export TRACE_VIEWER_CI_MODE=true
+```
+
+CI mode enables:
+- `on_failure` capture mode (reduces storage)
+- CI-friendly output paths
+- Compact trace format
 
 ---
 
@@ -488,9 +466,8 @@ Test With Playwright
 Captured data:
 - Screenshots via `Take Screenshot`
 - DOM via `Get Page Source`
+- Network via Playwright page events (native capture)
 - Variables via BuiltIn
-
-Note: Network and console capture use different mechanisms with Browser Library.
 
 ### Automatic Detection
 
@@ -499,22 +476,6 @@ The trace listener automatically detects which library is active:
 1. Checks for SeleniumLibrary instance
 2. Falls back to Browser Library
 3. Gracefully handles missing browser
-
-```python
-# Internal detection logic
-def _get_browser_library(self):
-    try:
-        return BuiltIn().get_library_instance('SeleniumLibrary')
-    except RuntimeError:
-        pass
-
-    try:
-        return BuiltIn().get_library_instance('Browser')
-    except RuntimeError:
-        pass
-
-    return None
-```
 
 ### Mixed Usage
 

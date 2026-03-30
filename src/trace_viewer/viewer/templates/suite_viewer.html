@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suite Viewer - {{SUITE_NAME}}</title>
+    <style>
+        /* ------------------------------------------------------------------ */
+        /* Reset and base                                                       */
+        /* ------------------------------------------------------------------ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            /* Status colours – mirror viewer.html exactly */
+            --color-pass: #22c55e;
+            --color-pass-bg: #dcfce7;
+            --color-fail: #ef4444;
+            --color-fail-bg: #fee2e2;
+            --color-skip: #eab308;
+            --color-skip-bg: #fef9c3;
+            --color-not-run: #6b7280;
+            --color-not-run-bg: #f3f4f6;
+
+            /* Layout */
+            --sidebar-width: 300px;
+            --stats-bar-height: 56px;
+            --header-height: 60px;
+
+            /* Surface palette */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-tertiary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                         'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* App shell – header / stats-bar / sidebar / main                     */
+        /* ------------------------------------------------------------------ */
+        .app {
+            display: grid;
+            grid-template-columns: var(--sidebar-width) 1fr;
+            grid-template-rows:
+                var(--header-height)
+                var(--stats-bar-height)
+                1fr;
+            height: 100vh;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Header                                                              */
+        /* ------------------------------------------------------------------ */
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .header-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .header-subtitle {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .generated-at {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Stats bar                                                           */
+        /* ------------------------------------------------------------------ */
+        .stats-bar {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            overflow-x: auto;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 20px 0 0;
+            margin-right: 20px;
+            border-right: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .stat-item:last-child {
+            border-right: none;
+            margin-right: 0;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .stat-value.total   { color: var(--text-primary); }
+        .stat-value.pass    { color: var(--color-pass); }
+        .stat-value.fail    { color: var(--color-fail); }
+        .stat-value.skip    { color: var(--color-skip); }
+        .stat-value.neutral { color: var(--text-secondary); }
+
+        .pass-rate-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 20px 0 0;
+            margin-right: 20px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .pass-rate-bar:last-child {
+            border-right: none;
+            margin-right: 0;
+        }
+
+        .pass-rate-track {
+            width: 80px;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .pass-rate-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: var(--color-pass);
+            transition: width 0.4s ease;
+        }
+
+        .pass-rate-fill.low {
+            background: var(--color-fail);
+        }
+
+        .pass-rate-fill.medium {
+            background: var(--color-skip);
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Sidebar – test list                                                  */
+        /* ------------------------------------------------------------------ */
+        .sidebar {
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 12px 16px 10px;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header-title {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 5px 9px;
+            font-size: 0.8125rem;
+            font-family: inherit;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-input:focus {
+            border-color: #6b7280;
+            box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.15);
+            background: var(--bg-primary);
+        }
+
+        .sidebar-filter-row {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .filter-btn {
+            flex: 1;
+            padding: 3px 6px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .filter-btn:hover {
+            background: var(--bg-secondary);
+        }
+
+        .filter-btn.active-all    { background: var(--text-primary); color: white; border-color: var(--text-primary); }
+        .filter-btn.active-pass   { background: var(--color-pass); color: white; border-color: var(--color-pass); }
+        .filter-btn.active-fail   { background: var(--color-fail); color: white; border-color: var(--color-fail); }
+        .filter-btn.active-skip   { background: var(--color-skip); color: #713f12; border-color: var(--color-skip); }
+
+        .results-counter {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            padding: 4px 0 0;
+        }
+
+        .results-counter.no-results {
+            color: var(--color-fail);
+        }
+
+        .test-list {
+            list-style: none;
+            overflow-y: auto;
+            flex: 1;
+            padding: 4px 0;
+        }
+
+        .test-item {
+            padding: 9px 12px 9px 14px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: background-color 0.12s ease;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .test-item:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .test-item.active {
+            background-color: var(--bg-tertiary);
+        }
+
+        .test-item.active.pass { border-left-color: var(--color-pass); }
+        .test-item.active.fail { border-left-color: var(--color-fail); }
+        .test-item.active.skip { border-left-color: var(--color-skip); }
+        .test-item.active.not-run { border-left-color: var(--color-not-run); }
+
+        .test-item-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 5px;
+        }
+
+        .test-item-dot.pass    { background-color: var(--color-pass); }
+        .test-item-dot.fail    { background-color: var(--color-fail); }
+        .test-item-dot.skip    { background-color: var(--color-skip); }
+        .test-item-dot.not-run { background-color: var(--color-not-run); }
+
+        .test-item-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .test-item-name {
+            font-size: 0.8125rem;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .test-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 6px;
+            border-radius: 9999px;
+            font-size: 0.625rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+
+        .status-badge.pass    { background: var(--color-pass-bg);    color: var(--color-pass); }
+        .status-badge.fail    { background: var(--color-fail-bg);    color: var(--color-fail); }
+        .status-badge.skip    { background: var(--color-skip-bg);    color: var(--color-skip); }
+        .status-badge.not-run { background: var(--color-not-run-bg); color: var(--color-not-run); }
+
+        .test-duration {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+        }
+
+        .no-viewer-icon {
+            font-size: 0.6875rem;
+            color: var(--color-not-run);
+            flex-shrink: 0;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Main area – iframe / link / empty state                             */
+        /* ------------------------------------------------------------------ */
+        .main {
+            background: var(--bg-secondary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* iframe embed mode */
+        .viewer-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Link-only mode (> 30 tests) */
+        .test-link-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 20px;
+            padding: 32px;
+        }
+
+        .test-link-info {
+            text-align: center;
+            max-width: 480px;
+        }
+
+        .test-link-info .test-link-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .test-link-info .test-link-meta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .open-viewer-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            background: var(--text-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .open-viewer-btn:hover {
+            opacity: 0.85;
+        }
+
+        .open-viewer-btn.disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* Empty / no-selection state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 12px;
+            color: var(--text-secondary);
+            padding: 32px;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            opacity: 0.35;
+        }
+
+        .empty-state-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .empty-state-subtitle {
+            font-size: 0.875rem;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* No-test placeholder                                                  */
+        /* ------------------------------------------------------------------ */
+        .no-tests-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            gap: 8px;
+            padding: 32px;
+            text-align: center;
+        }
+
+        .no-tests-icon {
+            font-size: 2.5rem;
+            opacity: 0.4;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Keyboard hints overlay                                               */
+        /* ------------------------------------------------------------------ */
+        .keyboard-hints {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            background: var(--bg-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 16px;
+            z-index: 200;
+        }
+
+        .keyboard-hint kbd {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.75rem;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Responsive                                                           */
+        /* ------------------------------------------------------------------ */
+        @media (max-width: 900px) {
+            :root {
+                --sidebar-width: 240px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows:
+                    var(--header-height)
+                    auto          /* stats bar wraps */
+                    220px         /* sidebar fixed height */
+                    1fr;          /* main takes rest */
+            }
+
+            .stats-bar {
+                flex-wrap: wrap;
+                height: auto;
+                padding: 8px 16px;
+                gap: 8px;
+            }
+
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .keyboard-hints {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app" id="app">
+        <!-- ================================================================ -->
+        <!-- Header                                                            -->
+        <!-- ================================================================ -->
+        <header class="header">
+            <div class="header-left">
+                <span class="header-icon" aria-hidden="true">&#128203;</span>
+                <span class="header-title" id="suite-title">{{SUITE_NAME}}</span>
+            </div>
+            <div class="header-right">
+                <span class="generated-at" id="generated-at"></span>
+            </div>
+        </header>
+
+        <!-- ================================================================ -->
+        <!-- Stats bar                                                         -->
+        <!-- ================================================================ -->
+        <div class="stats-bar" role="status" aria-label="Suite statistics" id="stats-bar">
+            <!-- populated by JS -->
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- Sidebar                                                           -->
+        <!-- ================================================================ -->
+        <aside class="sidebar" aria-label="Test list">
+            <div class="sidebar-header">
+                <p class="sidebar-header-title">Tests</p>
+                <input
+                    type="search"
+                    id="search-input"
+                    class="search-input"
+                    placeholder="Filter tests&#8230;"
+                    aria-label="Filter tests"
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <div class="sidebar-filter-row" role="group" aria-label="Status filter">
+                    <button class="filter-btn active-all" data-filter="all"  title="Show all">All</button>
+                    <button class="filter-btn"            data-filter="pass" title="Show passed">PASS</button>
+                    <button class="filter-btn"            data-filter="fail" title="Show failed">FAIL</button>
+                    <button class="filter-btn"            data-filter="skip" title="Show skipped">SKIP</button>
+                </div>
+                <p class="results-counter" id="results-counter" aria-live="polite"></p>
+            </div>
+            <ul class="test-list" id="test-list" role="listbox" aria-label="Test results">
+                <!-- populated by JS -->
+            </ul>
+        </aside>
+
+        <!-- ================================================================ -->
+        <!-- Main content area                                                 -->
+        <!-- ================================================================ -->
+        <main class="main" id="main-area" aria-label="Test viewer">
+            <!-- populated by JS -->
+        </main>
+    </div>
+
+    <!-- -------------------------------------------------------------------- -->
+    <!-- Keyboard shortcut hint overlay                                        -->
+    <!-- -------------------------------------------------------------------- -->
+    <div class="keyboard-hints" aria-hidden="true">
+        <span class="keyboard-hint"><kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate</span>
+        <span class="keyboard-hint"><kbd>Enter</kbd> Open</span>
+        <span class="keyboard-hint"><kbd>/</kbd> Search</span>
+        <span class="keyboard-hint"><kbd>Esc</kbd> Clear</span>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        /* ================================================================== */
+        /* Data injected by SuiteViewerGenerator                               */
+        /* ================================================================== */
+        const SUITE_DATA = {{SUITE_DATA}};
+
+        /* ================================================================== */
+        /* State                                                                */
+        /* ================================================================== */
+        let selectedIndex = -1;   // index into filteredTests
+        let filteredTests = [];
+        let statusFilter = 'all';
+        let searchQuery = '';
+
+        /* ================================================================== */
+        /* Utility helpers                                                      */
+        /* ================================================================== */
+
+        /**
+         * Escape raw text for safe injection into innerHTML.
+         * @param {string} str
+         * @returns {string}
+         */
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = String(str == null ? '' : str);
+            return d.innerHTML;
+        }
+
+        /**
+         * Format a duration in milliseconds to a human-readable string.
+         * @param {number} ms
+         * @returns {string}
+         */
+        function formatDuration(ms) {
+            if (!ms || ms <= 0) return '—';
+            if (ms < 1000) return ms + 'ms';
+            if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
+            const min = Math.floor(ms / 60000);
+            const sec = ((ms % 60000) / 1000).toFixed(1);
+            return min + 'm ' + sec + 's';
+        }
+
+        /**
+         * Format an ISO 8601 timestamp to a locale-aware date-time string.
+         * @param {string} iso
+         * @returns {string}
+         */
+        function formatDate(iso) {
+            if (!iso) return '';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+            } catch (_) {
+                return iso;
+            }
+        }
+
+        /**
+         * Normalise a status string to a CSS class token.
+         * @param {string} status
+         * @returns {string}
+         */
+        function statusClass(status) {
+            const s = (status || '').toUpperCase();
+            if (s === 'PASS') return 'pass';
+            if (s === 'FAIL') return 'fail';
+            if (s === 'SKIP') return 'skip';
+            return 'not-run';
+        }
+
+        /* ================================================================== */
+        /* Stats bar rendering                                                  */
+        /* ================================================================== */
+
+        function renderStatsBar() {
+            const s = SUITE_DATA.stats;
+            const passRate = s.pass_rate || 0;
+            let rateClass = 'pass';
+            if (passRate < 50) rateClass = 'low';
+            else if (passRate < 80) rateClass = 'medium';
+
+            const statsBar = document.getElementById('stats-bar');
+            statsBar.innerHTML = [
+                '<div class="stat-item">',
+                    '<span class="stat-label">Total</span>',
+                    '<span class="stat-value total">' + escapeHtml(s.total) + '</span>',
+                '</div>',
+                '<div class="stat-item">',
+                    '<span class="stat-label">Passed</span>',
+                    '<span class="stat-value pass">' + escapeHtml(s.passed) + '</span>',
+                '</div>',
+                '<div class="stat-item">',
+                    '<span class="stat-label">Failed</span>',
+                    '<span class="stat-value fail">' + escapeHtml(s.failed) + '</span>',
+                '</div>',
+                '<div class="stat-item">',
+                    '<span class="stat-label">Skipped</span>',
+                    '<span class="stat-value skip">' + escapeHtml(s.skipped) + '</span>',
+                '</div>',
+                '<div class="pass-rate-bar">',
+                    '<span class="stat-label">Pass rate</span>',
+                    '<div class="pass-rate-track">',
+                        '<div class="pass-rate-fill ' + rateClass + '" style="width:' + passRate + '%"></div>',
+                    '</div>',
+                    '<span class="stat-value neutral">' + escapeHtml(passRate) + '%</span>',
+                '</div>',
+                '<div class="stat-item">',
+                    '<span class="stat-label">Duration</span>',
+                    '<span class="stat-value neutral">' + escapeHtml(formatDuration(s.total_duration_ms)) + '</span>',
+                '</div>',
+            ].join('');
+        }
+
+        /* ================================================================== */
+        /* Test list rendering                                                  */
+        /* ================================================================== */
+
+        function applyFilters() {
+            const q = searchQuery.toLowerCase();
+            filteredTests = SUITE_DATA.tests.filter(function (t) {
+                if (statusFilter !== 'all' && statusClass(t.status) !== statusFilter) {
+                    return false;
+                }
+                if (q && t.test_name.toLowerCase().indexOf(q) === -1) {
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function renderTestList() {
+            applyFilters();
+
+            const list = document.getElementById('test-list');
+            const counter = document.getElementById('results-counter');
+
+            if (filteredTests.length === 0) {
+                list.innerHTML =
+                    '<li style="padding:16px;color:var(--text-secondary);font-size:0.8125rem;font-style:italic;">' +
+                    'No tests match the current filter.</li>';
+                counter.textContent = '0 / ' + SUITE_DATA.tests.length + ' tests';
+                counter.classList.add('no-results');
+                return;
+            }
+
+            counter.textContent = filteredTests.length + ' / ' + SUITE_DATA.tests.length + ' tests';
+            counter.classList.remove('no-results');
+
+            list.innerHTML = filteredTests.map(function (test, idx) {
+                const sc = statusClass(test.status);
+                const isActive = (idx === selectedIndex);
+                const activeClass = isActive ? ' active ' + sc : '';
+                const viewerOk = test.viewer_exists;
+                const noViewerIcon = !viewerOk
+                    ? '<span class="no-viewer-icon" title="viewer.html not generated yet">&#10006;</span>'
+                    : '';
+
+                return [
+                    '<li class="test-item' + activeClass + '" ',
+                        'role="option" ',
+                        'aria-selected="' + isActive + '" ',
+                        'data-idx="' + idx + '" ',
+                        'tabindex="-1" ',
+                        'title="' + escapeHtml(test.test_name) + '">',
+                        '<span class="test-item-dot ' + sc + '" aria-hidden="true"></span>',
+                        '<div class="test-item-body">',
+                            '<div class="test-item-name">' + escapeHtml(test.test_name) + '</div>',
+                            '<div class="test-item-meta">',
+                                '<span class="status-badge ' + sc + '">' + escapeHtml(test.status) + '</span>',
+                                '<span class="test-duration">' + escapeHtml(formatDuration(test.duration_ms)) + '</span>',
+                            '</div>',
+                        '</div>',
+                        noViewerIcon,
+                    '</li>',
+                ].join('');
+            }).join('');
+
+            // Attach click listeners
+            list.querySelectorAll('.test-item').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    const idx = parseInt(el.getAttribute('data-idx'), 10);
+                    selectTest(idx);
+                });
+            });
+        }
+
+        /* ================================================================== */
+        /* Main area rendering                                                  */
+        /* ================================================================== */
+
+        function renderEmptyState() {
+            const main = document.getElementById('main-area');
+            if (SUITE_DATA.tests.length === 0) {
+                main.innerHTML = [
+                    '<div class="no-tests-state">',
+                        '<span class="no-tests-icon" aria-hidden="true">&#128202;</span>',
+                        '<p>No traces found in this directory.</p>',
+                        '<p style="font-size:0.8125rem;">Run your Robot Framework tests with TraceListener to generate traces.</p>',
+                    '</div>',
+                ].join('');
+            } else {
+                main.innerHTML = [
+                    '<div class="empty-state">',
+                        '<span class="empty-state-icon" aria-hidden="true">&#128270;</span>',
+                        '<p class="empty-state-title">Select a test to inspect it</p>',
+                        '<p class="empty-state-subtitle">',
+                            'Click a test in the sidebar or use &uarr;&darr; arrow keys to navigate.',
+                        '</p>',
+                    '</div>',
+                ].join('');
+            }
+        }
+
+        function renderTestViewer(test) {
+            const main = document.getElementById('main-area');
+
+            if (SUITE_DATA.embed_iframes) {
+                // ---------------------------------------------------------- //
+                // Embed the individual viewer.html in an iframe               //
+                // ---------------------------------------------------------- //
+                if (!test.viewer_exists) {
+                    main.innerHTML = [
+                        '<div class="empty-state">',
+                            '<span class="empty-state-icon" aria-hidden="true">&#9888;</span>',
+                            '<p class="empty-state-title">Viewer not generated</p>',
+                            '<p class="empty-state-subtitle">',
+                                'Run <code>trace-viewer open</code> or regenerate the viewer for this trace.',
+                            '</p>',
+                        '</div>',
+                    ].join('');
+                    return;
+                }
+                main.innerHTML =
+                    '<iframe class="viewer-iframe" src="' + escapeHtml(test.viewer_url) + '" ' +
+                    'title="' + escapeHtml(test.test_name) + '" ' +
+                    'sandbox="allow-scripts allow-same-origin"></iframe>';
+            } else {
+                // ---------------------------------------------------------- //
+                // Large suite: render a detail card with a link to open       //
+                // ---------------------------------------------------------- //
+                const sc = statusClass(test.status);
+                const btnDisabled = !test.viewer_exists ? ' disabled' : '';
+                const btnClass = !test.viewer_exists ? ' disabled' : '';
+                const href = test.viewer_exists ? test.viewer_url : '#';
+                const target = test.viewer_exists ? '_blank' : '_self';
+                const rel = test.viewer_exists ? 'noopener noreferrer' : '';
+
+                main.innerHTML = [
+                    '<div class="test-link-panel">',
+                        '<div class="test-link-info">',
+                            '<p class="test-link-name">' + escapeHtml(test.test_name) + '</p>',
+                            '<div class="test-link-meta">',
+                                '<span class="status-badge ' + sc + '">' + escapeHtml(test.status) + '</span>',
+                                '<span>' + escapeHtml(formatDuration(test.duration_ms)) + '</span>',
+                                test.start_time
+                                    ? '<span>' + escapeHtml(formatDate(test.start_time)) + '</span>'
+                                    : '',
+                                test.keywords_count
+                                    ? '<span>' + escapeHtml(test.keywords_count) + ' keywords</span>'
+                                    : '',
+                            '</div>',
+                            test.message
+                                ? '<p style="margin-top:12px;font-size:0.875rem;color:var(--color-fail);' +
+                                  'word-break:break-word;">' + escapeHtml(test.message) + '</p>'
+                                : '',
+                        '</div>',
+                        '<a class="open-viewer-btn' + btnClass + '" ',
+                            'href="' + escapeHtml(href) + '" ',
+                            'target="' + target + '" ',
+                            rel ? ('rel="' + escapeHtml(rel) + '" ') : '',
+                            btnDisabled ? 'aria-disabled="true" ' : '',
+                            'style="pointer-events:' + (test.viewer_exists ? 'auto' : 'none') + '">',
+                            test.viewer_exists
+                                ? '&#128269; Open Viewer'
+                                : '&#9888; Viewer not generated',
+                        '</a>',
+                    '</div>',
+                ].join('');
+            }
+        }
+
+        /* ================================================================== */
+        /* Selection                                                            */
+        /* ================================================================== */
+
+        function selectTest(idx) {
+            if (idx < 0 || idx >= filteredTests.length) return;
+
+            selectedIndex = idx;
+            const test = filteredTests[idx];
+
+            // Update active state in sidebar list
+            const listEl = document.getElementById('test-list');
+            listEl.querySelectorAll('.test-item').forEach(function (el) {
+                const elIdx = parseInt(el.getAttribute('data-idx'), 10);
+                const sc = statusClass(test.status);
+                if (elIdx === idx) {
+                    el.classList.add('active', sc);
+                    el.setAttribute('aria-selected', 'true');
+                    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    // Remove active + all status classes
+                    el.classList.remove('active', 'pass', 'fail', 'skip', 'not-run');
+                    el.setAttribute('aria-selected', 'false');
+                }
+            });
+
+            renderTestViewer(test);
+        }
+
+        /* ================================================================== */
+        /* Filter buttons                                                       */
+        /* ================================================================== */
+
+        function initFilterButtons() {
+            document.querySelectorAll('.filter-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    statusFilter = btn.getAttribute('data-filter');
+
+                    // Update button active classes
+                    document.querySelectorAll('.filter-btn').forEach(function (b) {
+                        b.className = 'filter-btn';
+                    });
+                    btn.classList.add('active-' + statusFilter);
+
+                    // Reset selection when filter changes
+                    selectedIndex = -1;
+                    renderTestList();
+                    renderEmptyState();
+                });
+            });
+        }
+
+        /* ================================================================== */
+        /* Search                                                               */
+        /* ================================================================== */
+
+        function initSearch() {
+            const input = document.getElementById('search-input');
+
+            input.addEventListener('input', function () {
+                searchQuery = input.value;
+                selectedIndex = -1;
+                renderTestList();
+                renderEmptyState();
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    document.getElementById('test-list').focus();
+                } else if (e.key === 'Escape') {
+                    input.value = '';
+                    searchQuery = '';
+                    selectedIndex = -1;
+                    renderTestList();
+                    renderEmptyState();
+                }
+            });
+        }
+
+        /* ================================================================== */
+        /* Keyboard navigation                                                  */
+        /* ================================================================== */
+
+        function initKeyboardNav() {
+            document.addEventListener('keydown', function (e) {
+                const tag = (e.target.tagName || '').toLowerCase();
+                const isEditable = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+                // "/" focuses the search box
+                if (e.key === '/' && !isEditable) {
+                    e.preventDefault();
+                    document.getElementById('search-input').focus();
+                    return;
+                }
+
+                // Arrow keys navigate the test list
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    if (isEditable && tag !== 'input') return;
+                    // If the search input is focused, let ArrowDown blur it
+                    if (tag === 'input') {
+                        document.getElementById('search-input').blur();
+                    }
+                    e.preventDefault();
+                    if (filteredTests.length === 0) return;
+
+                    let next = selectedIndex;
+                    if (e.key === 'ArrowDown') {
+                        next = (selectedIndex + 1) % filteredTests.length;
+                    } else {
+                        next = selectedIndex <= 0
+                            ? filteredTests.length - 1
+                            : selectedIndex - 1;
+                    }
+                    selectTest(next);
+                    return;
+                }
+
+                // Enter opens the selected test in a new tab (link mode)
+                if (e.key === 'Enter' && !isEditable) {
+                    if (selectedIndex >= 0 && selectedIndex < filteredTests.length) {
+                        const test = filteredTests[selectedIndex];
+                        if (!SUITE_DATA.embed_iframes && test.viewer_exists) {
+                            window.open(test.viewer_url, '_blank', 'noopener,noreferrer');
+                        }
+                    }
+                    return;
+                }
+
+                // Escape clears search and selection
+                if (e.key === 'Escape' && !isEditable) {
+                    const input = document.getElementById('search-input');
+                    if (input.value) {
+                        input.value = '';
+                        searchQuery = '';
+                        selectedIndex = -1;
+                        renderTestList();
+                        renderEmptyState();
+                    }
+                }
+            });
+        }
+
+        /* ================================================================== */
+        /* Initialisation                                                       */
+        /* ================================================================== */
+
+        function init() {
+            // Header subtitle
+            const genAt = document.getElementById('generated-at');
+            if (SUITE_DATA.stats && SUITE_DATA.stats.generated_at) {
+                genAt.textContent = 'Generated ' + formatDate(SUITE_DATA.stats.generated_at);
+            }
+
+            renderStatsBar();
+            renderTestList();
+            renderEmptyState();
+            initFilterButtons();
+            initSearch();
+            initKeyboardNav();
+
+            // Auto-select first failing test for quick triage, else first test
+            if (filteredTests.length > 0) {
+                const firstFail = filteredTests.findIndex(function (t) {
+                    return statusClass(t.status) === 'fail';
+                });
+                selectTest(firstFail >= 0 ? firstFail : 0);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+</body>
+</html>
