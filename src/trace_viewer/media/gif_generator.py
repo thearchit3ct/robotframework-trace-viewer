@@ -26,6 +26,10 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL.Image import Image as _PILImage
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -86,7 +90,7 @@ def _load_keyword_metadata(kw_dir: Path) -> dict[str, str]:
         return fallback
 
 
-def _resize_image(image: object, max_width: int) -> object:
+def _resize_image(image: _PILImage, max_width: int) -> _PILImage:
     """Resize a Pillow Image so its width does not exceed *max_width*.
 
     The aspect ratio is preserved.  Images that are already narrower than
@@ -196,9 +200,9 @@ def generate_gif(
     output_path = output if output is not None else trace_dir / "replay.gif"
 
     # Load and resize all frames.
-    frames: list[object] = []
+    frames: list[_PILImage] = []
     for path in screenshot_paths:
-        img = Image.open(path).convert("RGBA")
+        img: _PILImage = Image.open(path).convert("RGBA")
         img = _resize_image(img, max_width)
         # GIF supports palette mode only; convert keeping transparency.
         frames.append(img.convert("P", palette=Image.Palette.ADAPTIVE))  # type: ignore[attr-defined]

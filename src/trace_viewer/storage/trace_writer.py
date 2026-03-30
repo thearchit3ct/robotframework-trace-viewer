@@ -341,7 +341,7 @@ class TraceWriter:
 
                 from PIL import Image  # type: ignore[import-untyped]
 
-                img = Image.open(io.BytesIO(png_data))
+                img: Image.Image = Image.open(io.BytesIO(png_data))
                 if img.mode not in ("RGBA", "RGB"):
                     img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
                 webp_buffer = io.BytesIO()
