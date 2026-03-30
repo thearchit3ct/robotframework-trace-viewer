@@ -26,7 +26,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from PIL.Image import Image as _PILImage
@@ -103,20 +103,17 @@ def _resize_image(image: _PILImage, max_width: int) -> _PILImage:
     Returns:
         The original image (if no resize needed) or a new resized ``Image``.
     """
-    # We accept ``object`` for the type so callers do not need a Pillow import
-    # at the module level.  Attribute access is safe because callers guarantee
-    # the object is a real PIL Image.
-    width, height = image.size  # type: ignore[attr-defined]
+    width, height = image.size
     if width <= max_width:
         return image
     ratio = max_width / width
     new_height = max(1, int(height * ratio))
     # LANCZOS is the highest-quality downsampling filter in Pillow.
     resampling = _get_resampling_filter()
-    return image.resize((max_width, new_height), resampling)  # type: ignore[attr-defined]
+    return image.resize((max_width, new_height), resampling)
 
 
-def _get_resampling_filter() -> object:
+def _get_resampling_filter() -> int:
     """Return the best available Pillow resampling filter.
 
     Pillow>=9.1 deprecated ``Image.ANTIALIAS`` in favour of
@@ -128,11 +125,11 @@ def _get_resampling_filter() -> object:
     try:
         from PIL import Image  # type: ignore[import]
 
-        return Image.Resampling.LANCZOS
+        return int(Image.Resampling.LANCZOS)
     except AttributeError:
         from PIL import Image  # type: ignore[import]
 
-        return Image.LANCZOS  # type: ignore[attr-defined]
+        return int(Image.LANCZOS)  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +209,7 @@ def generate_gif(
     first_frame = frames[0]
     rest_frames = frames[1:]
 
-    save_kwargs: dict[str, object] = {
+    save_kwargs: dict[str, Any] = {
         "format": "GIF",
         "save_all": True,
         "loop": 0,  # loop indefinitely
@@ -222,7 +219,7 @@ def generate_gif(
     if rest_frames:
         save_kwargs["append_images"] = rest_frames
 
-    first_frame.save(output_path, **save_kwargs)  # type: ignore[attr-defined]
+    first_frame.save(output_path, **save_kwargs)
     return output_path.resolve() if isinstance(output_path, Path) else Path(output_path).resolve()
 
 
