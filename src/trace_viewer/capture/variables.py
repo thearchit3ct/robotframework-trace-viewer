@@ -18,7 +18,7 @@ class VariablesCapture:
         {"USERNAME": "testuser", "PASSWORD": "***MASKED***"}
     """
 
-    SENSITIVE_PATTERNS: tuple[str, ...] = (
+    DEFAULT_SENSITIVE_PATTERNS: tuple[str, ...] = (
         "password",
         "secret",
         "token",
@@ -30,9 +30,19 @@ class VariablesCapture:
     MASKED_VALUE: str = "***MASKED***"
     MAX_VALUE_LENGTH: int = 500
 
-    def __init__(self) -> None:
-        """Initialize the VariablesCapture instance."""
+    def __init__(self, extra_patterns: Optional[list[str]] = None) -> None:
+        """Initialize the VariablesCapture instance.
+
+        Args:
+            extra_patterns: Additional or replacement patterns to use for masking.
+                If provided, these replace the default patterns entirely.
+                This allows full customization via trace-viewer.yml config.
+        """
         self._builtin: Optional[Any] = None
+        if extra_patterns is not None:
+            self.SENSITIVE_PATTERNS: tuple[str, ...] = tuple(extra_patterns)
+        else:
+            self.SENSITIVE_PATTERNS = self.DEFAULT_SENSITIVE_PATTERNS
 
     @property
     def builtin(self) -> Any:

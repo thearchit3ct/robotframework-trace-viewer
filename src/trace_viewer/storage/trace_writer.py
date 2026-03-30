@@ -297,18 +297,73 @@ class TraceWriter:
         self._write_json_atomic(variables_path, data)
         return variables_path
 
-    def write_screenshot(self, keyword_dir: Path, png_data: bytes) -> Path:
-        """Write screenshot.png for a keyword.
+    def write_screenshot(
+        self,
+        keyword_dir: Path,
+        png_data: bytes,
+        fmt: str = "png",
+        webp_quality: int = 80,
+    ) -> Path:
+        """Write a screenshot for a keyword, optionally converting it to WebP.
 
-        Writes the raw PNG bytes to the keyword directory.
+        By default the raw PNG bytes are written as ``screenshot.png``.  When
+        ``fmt="webp"`` is requested the PNG bytes are converted in-memory via
+        Pillow and saved as ``screenshot.webp`` instead.  Pillow is imported
+        lazily; if it is not installed a warning is logged and the PNG fallback
+        is used automatically so that capture is never silently dropped.
 
         Args:
             keyword_dir: Path to the keyword directory.
-            png_data: Raw PNG image bytes.
+            png_data: Raw PNG image bytes (always provided as PNG regardless of
+                target format).
+            fmt: Output format – ``"png"`` (default) or ``"webp"``.  Any other
+                value is treated as ``"png"``.
+            webp_quality: WebP encoding quality (1-100).  Only used when
+                ``fmt="webp"``.  Default is 80.
 
         Returns:
-            Path to the written screenshot file.
+            Path to the written screenshot file (``screenshot.png`` or
+            ``screenshot.webp`` depending on *fmt*).
+
+        Example::
+
+            # Write as PNG (default)
+            path = writer.write_screenshot(kw_dir, png_bytes)
+            # path == kw_dir / "screenshot.png"
+
+            # Write as WebP (requires Pillow>=9.0)
+            path = writer.write_screenshot(kw_dir, png_bytes, fmt="webp", webp_quality=75)
+            # path == kw_dir / "screenshot.webp"
         """
+        if fmt == "webp":
+            try:
+                import io
+
+                from PIL import Image  # type: ignore[import-untyped]
+
+                img = Image.open(io.BytesIO(png_data))
+                if img.mode not in ("RGBA", "RGB"):
+                    img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+                webp_buffer = io.BytesIO()
+                img.save(webp_buffer, format="WEBP", quality=webp_quality, method=6)
+                screenshot_path = keyword_dir / "screenshot.webp"
+                screenshot_path.write_bytes(webp_buffer.getvalue())
+                return screenshot_path
+            except ImportError:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Pillow is not installed; falling back to PNG. "
+                    "Install with: pip install 'Pillow>=9.0'"
+                )
+            except Exception as exc:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "WebP conversion failed (%s); falling back to PNG.", exc
+                )
+
+        # Default: write raw PNG bytes
         screenshot_path = keyword_dir / "screenshot.png"
         screenshot_path.write_bytes(png_data)
         return screenshot_path

@@ -6,5 +6,6 @@ that display Robot Framework test execution traces.
 
 from .comparator import TraceComparator
 from .generator import ViewerGenerator
+from .suite_generator import SuiteViewerGenerator
 
-__all__ = ["ViewerGenerator", "TraceComparator"]
+__all__ = ["ViewerGenerator", "TraceComparator", "SuiteViewerGenerator"]

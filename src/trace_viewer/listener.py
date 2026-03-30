@@ -6,6 +6,7 @@ and captures trace data (keywords, timing, status) for later visualization.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -23,6 +24,7 @@ from trace_viewer.capture.dom import DOMCapture
 from trace_viewer.capture.network import NetworkCapture
 from trace_viewer.capture.screenshot import ScreenshotCapture
 from trace_viewer.capture.variables import VariablesCapture
+from trace_viewer.config import TraceConfig, load_config
 from trace_viewer.storage.trace_writer import TraceWriter
 
 # ViewerGenerator may not exist yet - import conditionally
@@ -141,17 +143,43 @@ class TraceListener(ListenerV3):
         self,
         output_dir: str = "./traces",
         capture_mode: str = "full",
+        config: str | None = None,
+        screenshot_mode: str | None = None,
+        buffer_size: int | None = None,
+        ci: bool = False,
     ) -> None:
         """Initialize the TraceListener.
 
         Args:
             output_dir: Directory where trace data will be saved.
             capture_mode: Capture mode ('full', 'on_failure', or 'disabled').
+            config: Path to trace-viewer.yml config file.
+            screenshot_mode: Screenshot mode ('viewport' or 'full_page').
+            buffer_size: Ring buffer size for on_failure mode.
+            ci: Enable CI/CD mode (on_failure + CI-friendly output).
         """
-        self.output_dir = Path(output_dir)
+        # Load config with CLI overrides
+        cli_overrides: dict[str, Any] = {}
+        if output_dir != "./traces":
+            cli_overrides["output_dir"] = output_dir
+        if capture_mode != "full":
+            cli_overrides["capture_mode"] = capture_mode
+        if screenshot_mode is not None:
+            cli_overrides["screenshot_mode"] = screenshot_mode
+        if buffer_size is not None:
+            cli_overrides["buffer_size"] = buffer_size
+        if ci:
+            cli_overrides["ci_mode"] = True
+            cli_overrides["capture_mode"] = "on_failure"
+
+        self.config: TraceConfig = load_config(
+            config_path=config, cli_overrides=cli_overrides if cli_overrides else None
+        )
+
+        self.output_dir = Path(self.config.output_dir)
         self.capture_mode: CaptureMode = (
-            capture_mode  # type: ignore[assignment]
-            if capture_mode in ("full", "on_failure", "disabled")
+            self.config.capture_mode  # type: ignore[assignment]
+            if self.config.capture_mode in ("full", "on_failure", "disabled")
             else "full"
         )
 
@@ -160,14 +188,21 @@ class TraceListener(ListenerV3):
 
         # Initialize capture modules
         self.trace_writer = TraceWriter(str(self.output_dir))
-        self.screenshot_capture = ScreenshotCapture()
-        self.variables_capture = VariablesCapture()
+        self.screenshot_capture = ScreenshotCapture(screenshot_mode=self.config.screenshot_mode)
+        self.variables_capture = VariablesCapture(extra_patterns=self.config.masking_patterns)
         self.console_capture = ConsoleCapture()
         self.dom_capture = DOMCapture()
         self.network_capture = NetworkCapture()
         self.viewer_generator: Any | None = None
         if _HAS_VIEWER_GENERATOR and ViewerGenerator is not None:
             self.viewer_generator = ViewerGenerator()
+
+        # Ring buffer for on_failure mode
+        self._ring_buffer: Any | None = None
+        if self.capture_mode == "on_failure":
+            from trace_viewer.storage.ring_buffer import RingBuffer
+
+            self._ring_buffer = RingBuffer(maxlen=self.config.buffer_size)
 
         # Suite-level state
         self.trace_data: dict[str, Any] = {}
@@ -199,7 +234,7 @@ class TraceListener(ListenerV3):
 
         self.trace_data = {
             "version": "1.0.0",
-            "tool_version": "0.2.0",
+            "tool_version": "0.3.0",
             "suite_name": self.suite_name,
             "suite_source": self.suite_source,
             "capture_mode": self.capture_mode,
@@ -342,73 +377,11 @@ class TraceListener(ListenerV3):
         # Get keyword directory
         keyword_dir = self.current_test_dir / "keywords" / keyword_data["folder"]
 
-        # Capture screenshot and variables if capture_mode allows
-        if self._should_capture(status):
-            # Capture screenshot
-            try:
-                screenshot_data = self.screenshot_capture.capture()
-                if screenshot_data is not None:
-                    self.trace_writer.write_screenshot(keyword_dir, screenshot_data)
-                    keyword_data["has_screenshot"] = True
-                else:
-                    keyword_data["has_screenshot"] = False
-            except Exception as e:
-                logger.debug("Screenshot capture failed: %s", e)
-                keyword_data["has_screenshot"] = False
-
-            # Capture variables
-            try:
-                variables = self.variables_capture.capture()
-                if variables:
-                    self.trace_writer.write_keyword_variables(keyword_dir, variables)
-                    keyword_data["has_variables"] = True
-                else:
-                    keyword_data["has_variables"] = False
-            except Exception as e:
-                logger.debug("Variables capture failed: %s", e)
-                keyword_data["has_variables"] = False
-
-            # Capture console logs
-            try:
-                console_logs = self.console_capture.capture()
-                if console_logs:
-                    self.trace_writer.write_console_logs(keyword_dir, console_logs)
-                    keyword_data["has_console_logs"] = True
-                    keyword_data["console_logs_count"] = len(console_logs)
-                else:
-                    keyword_data["has_console_logs"] = False
-                    keyword_data["console_logs_count"] = 0
-            except Exception as e:
-                logger.debug("Console logs capture failed: %s", e)
-                keyword_data["has_console_logs"] = False
-                keyword_data["console_logs_count"] = 0
-
-            # Capture DOM snapshot
-            try:
-                dom_html = self.dom_capture.capture()
-                if dom_html:
-                    self.trace_writer.write_dom_snapshot(keyword_dir, dom_html)
-                    keyword_data["has_dom"] = True
-                else:
-                    keyword_data["has_dom"] = False
-            except Exception as e:
-                logger.debug("DOM capture failed: %s", e)
-                keyword_data["has_dom"] = False
-
-            # Capture network requests
-            try:
-                network_requests = self.network_capture.capture()
-                if network_requests:
-                    self.trace_writer.write_network_requests(keyword_dir, network_requests)
-                    keyword_data["has_network"] = True
-                    keyword_data["network_requests_count"] = len(network_requests)
-                else:
-                    keyword_data["has_network"] = False
-                    keyword_data["network_requests_count"] = 0
-            except Exception as e:
-                logger.debug("Network capture failed: %s", e)
-                keyword_data["has_network"] = False
-                keyword_data["network_requests_count"] = 0
+        # on_failure mode with ring buffer: capture in-memory, defer disk write
+        if self.capture_mode == "on_failure" and self._ring_buffer is not None:
+            self._capture_to_ring_buffer(keyword_data, keyword_dir)
+        elif self._should_capture(status):
+            self._capture_to_disk(keyword_data, keyword_dir)
         else:
             keyword_data["has_screenshot"] = False
             keyword_data["has_variables"] = False
@@ -423,6 +396,149 @@ class TraceListener(ListenerV3):
 
         # Add to current test's keyword list
         self.current_test["keywords"].append(keyword_data)
+
+    def _capture_to_disk(self, keyword_data: dict[str, Any], keyword_dir: Path) -> None:
+        """Capture all data and write directly to disk (full mode)."""
+        # Capture screenshot
+        try:
+            screenshot_data = self.screenshot_capture.capture()
+            if screenshot_data is not None:
+                self.trace_writer.write_screenshot(keyword_dir, screenshot_data)
+                keyword_data["has_screenshot"] = True
+            else:
+                keyword_data["has_screenshot"] = False
+        except Exception as e:
+            logger.debug("Screenshot capture failed: %s", e)
+            keyword_data["has_screenshot"] = False
+
+        # Capture variables
+        try:
+            variables = self.variables_capture.capture()
+            if variables:
+                self.trace_writer.write_keyword_variables(keyword_dir, variables)
+                keyword_data["has_variables"] = True
+            else:
+                keyword_data["has_variables"] = False
+        except Exception as e:
+            logger.debug("Variables capture failed: %s", e)
+            keyword_data["has_variables"] = False
+
+        # Capture console logs
+        try:
+            console_logs = self.console_capture.capture()
+            if console_logs:
+                self.trace_writer.write_console_logs(keyword_dir, console_logs)
+                keyword_data["has_console_logs"] = True
+                keyword_data["console_logs_count"] = len(console_logs)
+            else:
+                keyword_data["has_console_logs"] = False
+                keyword_data["console_logs_count"] = 0
+        except Exception as e:
+            logger.debug("Console logs capture failed: %s", e)
+            keyword_data["has_console_logs"] = False
+            keyword_data["console_logs_count"] = 0
+
+        # Capture DOM snapshot
+        try:
+            dom_html = self.dom_capture.capture()
+            if dom_html:
+                self.trace_writer.write_dom_snapshot(keyword_dir, dom_html)
+                keyword_data["has_dom"] = True
+            else:
+                keyword_data["has_dom"] = False
+        except Exception as e:
+            logger.debug("DOM capture failed: %s", e)
+            keyword_data["has_dom"] = False
+
+        # Capture network requests
+        try:
+            network_requests = self.network_capture.capture()
+            if network_requests:
+                self.trace_writer.write_network_requests(keyword_dir, network_requests)
+                keyword_data["has_network"] = True
+                keyword_data["network_requests_count"] = len(network_requests)
+            else:
+                keyword_data["has_network"] = False
+                keyword_data["network_requests_count"] = 0
+        except Exception as e:
+            logger.debug("Network capture failed: %s", e)
+            keyword_data["has_network"] = False
+            keyword_data["network_requests_count"] = 0
+
+    def _capture_to_ring_buffer(self, keyword_data: dict[str, Any], keyword_dir: Path) -> None:
+        """Capture data in-memory and push to ring buffer (on_failure mode)."""
+        from trace_viewer.storage.ring_buffer import KeywordCapture
+
+        capture = KeywordCapture(
+            index=keyword_data.get("index", 0),
+            name=keyword_data.get("name", ""),
+            folder=str(keyword_dir),
+            metadata=dict(keyword_data),
+        )
+
+        # Capture screenshot in memory
+        with contextlib.suppress(Exception):
+            capture.screenshot = self.screenshot_capture.capture()
+
+        # Capture variables in memory
+        with contextlib.suppress(Exception):
+            capture.variables = self.variables_capture.capture()
+
+        # Capture console logs in memory
+        with contextlib.suppress(Exception):
+            capture.console_logs = self.console_capture.capture()
+
+        # Capture DOM in memory
+        with contextlib.suppress(Exception):
+            capture.dom = self.dom_capture.capture()
+
+        # Capture network in memory
+        with contextlib.suppress(Exception):
+            capture.network = self.network_capture.capture()
+
+        # Update metadata flags
+        keyword_data["has_screenshot"] = capture.screenshot is not None
+        keyword_data["has_variables"] = bool(capture.variables)
+        keyword_data["has_console_logs"] = bool(capture.console_logs)
+        keyword_data["console_logs_count"] = (
+            len(capture.console_logs) if capture.console_logs else 0
+        )
+        keyword_data["has_dom"] = bool(capture.dom)
+        keyword_data["has_network"] = bool(capture.network)
+        keyword_data["network_requests_count"] = len(capture.network) if capture.network else 0
+
+        self._ring_buffer.push(capture)  # type: ignore[union-attr]
+
+    def _flush_ring_buffer(self) -> None:
+        """Flush ring buffer contents to disk (called on test failure)."""
+        if self._ring_buffer is None:
+            return
+
+        captures = self._ring_buffer.flush_all()
+        for capture in captures:
+            keyword_dir = Path(capture.folder)
+            keyword_dir.mkdir(parents=True, exist_ok=True)
+
+            if capture.screenshot is not None:
+                self.trace_writer.write_screenshot(keyword_dir, capture.screenshot)
+                capture.metadata["has_screenshot"] = True
+            if capture.variables:
+                self.trace_writer.write_keyword_variables(keyword_dir, capture.variables)
+                capture.metadata["has_variables"] = True
+            if capture.console_logs:
+                self.trace_writer.write_console_logs(keyword_dir, capture.console_logs)
+                capture.metadata["has_console_logs"] = True
+                capture.metadata["console_logs_count"] = len(capture.console_logs)
+            if capture.dom:
+                self.trace_writer.write_dom_snapshot(keyword_dir, capture.dom)
+                capture.metadata["has_dom"] = True
+            if capture.network:
+                self.trace_writer.write_network_requests(keyword_dir, capture.network)
+                capture.metadata["has_network"] = True
+                capture.metadata["network_requests_count"] = len(capture.network)
+
+            # Update metadata on disk
+            self.trace_writer.write_keyword_metadata(keyword_dir, capture.metadata)
 
     def end_test(self, data: Any, result: Any) -> None:
         """Called when a test case finishes.
@@ -453,10 +569,18 @@ class TraceListener(ListenerV3):
 
         self.current_test["keywords_count"] = len(self.current_test["keywords"])
 
+        # Flush ring buffer on failure, clear on pass
+        if self._ring_buffer is not None:
+            test_status = str(result.status) if hasattr(result, "status") else "UNKNOWN"
+            if test_status == "FAIL":
+                self._flush_ring_buffer()
+            else:
+                self._ring_buffer.clear()
+
         # Build manifest
         manifest = {
             "version": "1.0.0",
-            "tool_version": "0.2.0",
+            "tool_version": "0.3.0",
             "test_name": self.current_test["name"],
             "test_longname": self.current_test["longname"],
             "suite_name": self.suite_name,
