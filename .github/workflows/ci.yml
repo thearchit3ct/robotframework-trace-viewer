@@ -26,7 +26,7 @@ jobs:
       - name: Run linters
         run: |
           ruff check src/ tests/
-          black --check src/ tests/ --line-length=100
+          black --check src/ tests/
       - name: Run type checking
         run: mypy src/
       - name: Run tests
