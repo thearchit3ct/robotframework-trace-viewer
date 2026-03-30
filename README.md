@@ -8,7 +8,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9%2B-blue.svg" alt="Python 3.9+"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://robotframework.org/"><img src="https://img.shields.io/badge/Robot%20Framework-6.0%2B-green.svg" alt="Robot Framework"></a>
-  <a href="https://pypi.org/project/robotframework-trace-viewer/"><img src="https://img.shields.io/badge/PyPI-0.2.0-orange.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/robotframework-trace-viewer/"><img src="https://img.shields.io/badge/PyPI-0.3.0-orange.svg" alt="PyPI"></a>
 </p>
 
 <p align="center">
@@ -20,10 +20,23 @@
 
 ### Core Capture
 - **Screenshot Capture**: Automatically captures browser screenshots at each keyword execution
+- **Full-Page Screenshots**: Capture the entire page beyond the viewport (CDP & Playwright)
 - **DOM Snapshots**: Captures sanitized HTML snapshots of the page state
 - **Network Requests**: Records HTTP requests/responses via Chrome DevTools Protocol (CDP)
+- **Browser Library Network**: Native Playwright network capture via Browser Library
 - **Console Logs**: Captures browser console logs (info, warning, error)
 - **Variable Tracking**: Records Robot Framework variables with automatic masking of sensitive data
+- **Custom Masking Patterns**: Configure your own sensitive data patterns via config file
+
+### Capture Modes
+- **Full Mode**: Capture everything at every keyword (default)
+- **On-Failure Mode**: Ring buffer keeps last N keywords in memory, flushes to disk only when a test fails (zero disk I/O for passing tests)
+- **Disabled Mode**: No screenshot capture, only metadata tracking
+
+### Configuration
+- **Config File**: `trace-viewer.yml` with auto-discovery (project root or home directory)
+- **Precedence Chain**: CLI args > environment variables > config file > defaults
+- **Environment Variables**: All settings configurable via `TRACE_VIEWER_*` env vars
 
 ### Browser Support
 - **SeleniumLibrary**: Full support for Selenium WebDriver
@@ -31,13 +44,27 @@
 
 ### Analysis Tools
 - **Interactive Timeline**: Browse test execution step by step with an intuitive HTML viewer
+- **Search & Filter**: Search keywords by name and filter by status (PASS/FAIL/SKIP) in the viewer
 - **Trace Comparison**: Compare two traces to identify differences in keywords and variables
+- **Visual Diff**: Pixel-level screenshot comparison with diff overlay and similarity score
+- **Suite Viewer**: Aggregate view of multiple test traces with pass/fail statistics
 - **Statistics Dashboard**: Generate aggregated statistics across multiple traces
+- **GIF Replay**: Generate animated GIF or HTML slideshow from trace screenshots
+- **PDF Export**: Export traces as professional PDF reports (via weasyprint)
 - **ZIP Export**: Export traces as portable ZIP archives
 
 ### Integrations
 - **ReportPortal**: Upload traces to ReportPortal for centralized reporting
 - **Pabot**: Full support for parallel test execution with Pabot
+- **Pabot Merge**: Merge parallel traces into a unified Gantt-style timeline
+- **Jenkins Publishing**: Generate `index.html` compatible with HTML Publisher Plugin
+- **GitLab Publishing**: Generate `trace-summary.md` for merge request comments
+- **CI Mode**: `--ci` flag enables on_failure capture + CI-friendly output
+
+### Storage & Compression
+- **WebP Compression**: Convert PNG screenshots to WebP (60-80% size reduction)
+- **Trace Cleanup**: Automatic retention policy (configurable days + max traces)
+- **DOM Truncation**: Large DOM snapshots truncated to configurable limit
 
 ### Other
 - **Offline Viewer**: Generated HTML works completely offline without external dependencies
@@ -49,27 +76,47 @@
 pip install robotframework-trace-viewer
 ```
 
+With media support (GIF generation, visual diff):
+
+```bash
+pip install robotframework-trace-viewer[media]
+```
+
+With PDF export:
+
+```bash
+pip install robotframework-trace-viewer[pdf]
+```
+
+With all optional dependencies:
+
+```bash
+pip install robotframework-trace-viewer[all]
+```
+
 For development:
 
 ```bash
 pip install robotframework-trace-viewer[dev]
 ```
 
-For ReportPortal integration:
-
-```bash
-pip install robotframework-trace-viewer reportportal-client
-```
-
 ## Quick Start
 
-### 1. Run tests with the trace listener
+### 1. Generate a configuration file (optional)
+
+```bash
+trace-viewer init
+```
+
+This creates a `trace-viewer.yml` with documented defaults.
+
+### 2. Run tests with the trace listener
 
 ```bash
 robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
 ```
 
-### 2. Open the trace viewer
+### 3. Open the trace viewer
 
 ```bash
 trace-viewer open ./traces/my_test_20250119_143022
@@ -84,15 +131,82 @@ The viewer will open in your default browser, showing a timeline of all keywords
 | Option | Default | Description |
 |--------|---------|-------------|
 | `output_dir` | `./traces` | Directory where traces are saved |
-| `capture_mode` | `full` | Capture mode: `full`, `on_failure`, `none` |
+| `capture_mode` | `full` | Capture mode: `full`, `on_failure`, `disabled` |
+| `screenshot_mode` | `viewport` | Screenshot mode: `viewport`, `full_page` |
+| `buffer_size` | `10` | Ring buffer size for `on_failure` mode |
+| `config` | auto-discover | Path to `trace-viewer.yml` config file |
 
 Example with options:
 
 ```bash
 robot --listener "trace_viewer.TraceListener:output_dir=./my_traces:capture_mode=full" tests/
+
+# On-failure mode: only saves traces for failing tests
+robot --listener "trace_viewer.TraceListener:capture_mode=on_failure:buffer_size=15" tests/
+
+# Full-page screenshots
+robot --listener "trace_viewer.TraceListener:screenshot_mode=full_page" tests/
+```
+
+### Configuration File
+
+Create a `trace-viewer.yml` in your project root:
+
+```yaml
+# Output directory for traces
+output_dir: traces
+
+# Capture mode: full | on_failure | disabled
+capture_mode: full
+
+# Screenshot mode: viewport | full_page
+screenshot_mode: viewport
+
+# Ring buffer size for on_failure mode
+buffer_size: 10
+
+# Patterns to mask in captured variables
+masking_patterns:
+  - password
+  - secret
+  - token
+  - key
+  - credential
+  - auth
+  - api_key
+
+# Compression settings
+compression:
+  format: png          # png | webp
+  quality: 80          # WebP quality (1-100)
+  max_dom_size_kb: 500 # Truncate DOM snapshots larger than this
+
+# Retention policy
+retention:
+  days: 30
+  max_traces: 100
+
+# CI/CD mode
+ci_mode: false
+```
+
+Override any setting with environment variables:
+
+```bash
+export TRACE_VIEWER_CAPTURE_MODE=on_failure
+export TRACE_VIEWER_BUFFER_SIZE=20
+export TRACE_VIEWER_CI_MODE=true
 ```
 
 ### CLI Commands
+
+#### Initialize config
+
+```bash
+trace-viewer init [--output path]
+```
+
+Generates a default `trace-viewer.yml` configuration file.
 
 #### Open a trace
 
@@ -124,34 +238,81 @@ Displays detailed information about a specific trace.
 trace-viewer export <trace_path> -o archive.zip
 ```
 
-Exports a trace directory as a portable ZIP archive containing the viewer and all captured data.
-
 #### Compare two traces
 
 ```bash
 trace-viewer compare <trace1_path> <trace2_path> -o comparison.html
 ```
 
-Generates an HTML report comparing two traces, showing:
-- Matched, modified, added, and removed keywords
-- Variable differences between executions
-- Side-by-side comparison view
+#### Visual diff (pixel comparison)
+
+```bash
+trace-viewer compare-visual <trace1_path> <trace2_path> -o diff_report.html
+```
+
+Generates a report with side-by-side screenshots, diff overlay, and similarity scores.
 
 #### Generate statistics dashboard
 
 ```bash
-trace-viewer stats <traces_directory> -o dashboard.html
+trace-viewer stats <traces_directory> -o dashboard.html -O
 ```
 
-Generates an HTML dashboard with aggregated statistics:
-- Pass/fail rates and trends
-- Duration statistics (min, max, average, median)
-- Slowest tests identification
-- Flaky test detection
+#### Generate suite viewer
 
-Options:
-- `-o, --output`: Output path for the dashboard HTML
-- `-O, --open`: Open dashboard in browser after generation
+```bash
+trace-viewer suite <traces_directory> -o suite.html -O
+```
+
+Generates an aggregate view with pass/fail statistics and links to individual traces.
+
+#### Generate GIF/slideshow replay
+
+```bash
+# Animated GIF
+trace-viewer replay <trace_dir> --format gif --fps 2 --width 800
+
+# HTML slideshow with play/pause controls
+trace-viewer replay <trace_dir> --format html
+```
+
+#### Compress screenshots (PNG to WebP)
+
+```bash
+trace-viewer compress <traces_directory> --quality 80
+```
+
+#### Clean up old traces
+
+```bash
+trace-viewer cleanup <traces_directory> --days 30 --max-traces 100
+```
+
+#### Export to PDF
+
+```bash
+trace-viewer export-pdf <trace_dir> -o report.pdf [--screenshots-only]
+```
+
+Requires `weasyprint`: `pip install robotframework-trace-viewer[pdf]`
+
+#### Merge Pabot parallel traces
+
+```bash
+trace-viewer merge <traces_directory> -o merged/
+```
+
+Generates a unified Gantt-style timeline across all Pabot workers.
+
+#### Publish for CI/CD
+
+```bash
+# Jenkins (HTML Publisher compatible)
+trace-viewer publish <traces_directory> --format jenkins -o trace-reports/
+
+# GitLab (Markdown for MR comments)
+trace-viewer publish <traces_directory> --format gitlab -o trace-reports/
+```
 
 #### Export to ReportPortal
 
@@ -162,38 +323,6 @@ trace-viewer export-rp <traces_directory> \
   -k your_api_key
 ```
 
-Uploads traces to a ReportPortal server for centralized reporting.
-
-Options:
-- `-e, --endpoint`: ReportPortal server URL (or `RP_ENDPOINT` env var)
-- `-p, --project`: ReportPortal project name (or `RP_PROJECT` env var)
-- `-k, --api-key`: ReportPortal API key (or `RP_API_KEY` env var)
-- `-n, --launch-name`: Custom name for the launch
-- `--no-screenshots`: Skip uploading screenshots
-
-## Configuration
-
-### Sensitive Data Masking
-
-Variables containing the following keywords are automatically masked:
-- `password`
-- `secret`
-- `token`
-- `key`
-- `credential`
-- `auth`
-
-Example:
-```robot
-${PASSWORD}=    my_secret_password    # Will be masked as ***MASKED***
-```
-
-### Capture Modes
-
-- **full**: Capture screenshot, DOM, network, console, and variables at every keyword (default)
-- **on_failure**: Only capture when a test fails
-- **none**: Disable screenshot capture, only track metadata
-
 ## Captured Data
 
 Each keyword execution captures the following data:
@@ -201,34 +330,15 @@ Each keyword execution captures the following data:
 | Data Type | File | Description |
 |-----------|------|-------------|
 | Metadata | `metadata.json` | Keyword name, library, arguments, status, duration |
-| Screenshot | `screenshot.png` | Visual state of the browser |
+| Screenshot | `screenshot.png` / `screenshot.webp` | Visual state of the browser |
 | DOM Snapshot | `dom.html` | Sanitized HTML of the page |
 | Network Requests | `network.json` | HTTP requests/responses captured via CDP |
 | Console Logs | `console.json` | Browser console output (log, warn, error) |
 | Variables | `variables.json` | Robot Framework variables snapshot |
 
-### Network Capture
-
-Network requests are captured using Chrome DevTools Protocol (CDP) and include:
-- Request URL, method, and headers
-- Response status, headers, and size
-- Request timing and duration
-- Resource type (Document, Script, XHR, Fetch, etc.)
-
-**Supported browsers**: Chrome, Chromium, Edge (CDP-compatible browsers)
-
-### Console Capture
-
-Browser console logs are captured including:
-- Log level (INFO, WARNING, ERROR)
-- Message content
-- Source and timestamp
-
 ## Examples
 
 ### Basic Usage
-
-Run a simple test with trace capture:
 
 ```robot
 *** Settings ***
@@ -244,15 +354,29 @@ Login Test
     [Teardown]    Close Browser
 ```
 
-Execute with trace capture enabled:
-
 ```bash
 robot --listener trace_viewer.TraceListener:output_dir=./traces tests/login.robot
 ```
 
-### Using Browser Library
+### On-Failure Mode (CI optimized)
 
-The trace viewer also supports Playwright-based Browser Library:
+Only capture traces when tests fail — ideal for CI where you only need debugging data for failures:
+
+```bash
+robot --listener "trace_viewer.TraceListener:capture_mode=on_failure:buffer_size=10" tests/
+```
+
+The ring buffer keeps the last 10 keywords in memory. If a test passes, the buffer is discarded (zero disk I/O). If a test fails, the buffer is flushed to disk with full screenshots and data.
+
+### Full-Page Screenshots
+
+Capture the entire scrollable page, not just the viewport:
+
+```bash
+robot --listener "trace_viewer.TraceListener:screenshot_mode=full_page" tests/
+```
+
+### Using Browser Library
 
 ```robot
 *** Settings ***
@@ -269,71 +393,34 @@ Login Test With Playwright
     [Teardown]    Close Browser
 ```
 
-### Comparing Test Executions
-
-Compare a baseline trace with a new execution to identify regressions:
-
-```bash
-# Run baseline
-robot --listener trace_viewer.TraceListener:output_dir=./baseline tests/
-
-# Run new version
-robot --listener trace_viewer.TraceListener:output_dir=./current tests/
-
-# Compare traces
-trace-viewer compare ./baseline/login_test_* ./current/login_test_* -o diff.html
-```
-
-### Generating Statistics
-
-Generate a dashboard for all traces in a directory:
-
-```bash
-trace-viewer stats ./traces -o report.html -O
-```
-
-This generates and opens a dashboard showing:
-- Total tests: 50
-- Pass rate: 92%
-- Average duration: 3.2s
-- Slowest tests with details
-
 ### Parallel Execution with Pabot
 
-The trace viewer fully supports parallel test execution with [Pabot](https://pabot.org/):
-
 ```bash
-# Install Pabot
-pip install robotframework-pabot
-
 # Run tests in parallel with trace capture
-pabot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+pabot --processes 4 --listener trace_viewer.TraceListener:output_dir=./traces tests/
+
+# Merge parallel traces into timeline
+trace-viewer merge ./traces -o merged/
 ```
 
-Trace directories automatically include a process identifier (`_pabot0`, `_pabot1`, etc.) to prevent conflicts.
-
-### ReportPortal Integration
-
-Upload traces to ReportPortal for team-wide visibility:
+### Complete CI Pipeline
 
 ```bash
-# Using command line options
-trace-viewer export-rp ./traces \
-  -e https://rp.example.com \
-  -p robot_project \
-  -k abc123-def456
+# 1. Run tests with on_failure mode
+robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
 
-# Using environment variables
-export RP_ENDPOINT=https://rp.example.com
-export RP_PROJECT=robot_project
-export RP_API_KEY=abc123-def456
-trace-viewer export-rp ./traces
+# 2. Compress screenshots for storage efficiency
+trace-viewer compress ./traces --quality 80
+
+# 3. Generate suite summary
+trace-viewer suite ./traces -o traces/suite.html
+
+# 4. Publish for Jenkins
+trace-viewer publish ./traces --format jenkins -o trace-reports/
+
+# 5. Clean up old traces
+trace-viewer cleanup ./traces --days 30
 ```
-
-ReportPortal mapping:
-- **Launch**: Collection of trace exports
-- **Test**: Individual test case
-- **Step**: Keywords within the test
 
 ### CI/CD Integration
 
@@ -357,16 +444,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install robotframework robotframework-trace-viewer selenium
+          pip install robotframework robotframework-trace-viewer[media] selenium
 
       - name: Run tests with trace capture
         run: |
-          robot --listener trace_viewer.TraceListener:output_dir=./traces tests/
+          robot --listener "trace_viewer.TraceListener:capture_mode=on_failure" tests/
 
-      - name: Generate statistics dashboard
+      - name: Generate reports
         if: always()
         run: |
-          trace-viewer stats ./traces -o traces/dashboard.html
+          trace-viewer compress ./traces --quality 80
+          trace-viewer suite ./traces -o traces/suite.html
+          trace-viewer publish ./traces --format jenkins -o trace-reports/
 
       - name: Upload traces as artifacts
         if: always()
@@ -380,34 +469,35 @@ jobs:
 
 ```
 traces/
-└── login_test_20250120_143022/
-    ├── manifest.json          # Test metadata (name, status, duration)
-    ├── viewer.html            # Interactive HTML viewer
-    └── keywords/
-        ├── 001_open_browser/
-        │   ├── metadata.json  # Keyword name, args, status
-        │   ├── screenshot.png # Browser state at keyword end
-        │   ├── dom.html       # DOM snapshot
-        │   ├── network.json   # Network requests
-        │   ├── console.json   # Console logs
-        │   └── variables.json # RF variables snapshot
-        ├── 002_input_text/
-        │   └── ...
-        └── 003_click_button/
-            └── ...
++-- login_test_20250120_143022/
+|   +-- manifest.json          # Test metadata (name, status, duration)
+|   +-- viewer.html            # Interactive HTML viewer
+|   +-- keywords/
+|       +-- 001_open_browser/
+|       |   +-- metadata.json  # Keyword name, args, status
+|       |   +-- screenshot.png # Browser state at keyword end
+|       |   +-- dom.html       # DOM snapshot
+|       |   +-- network.json   # Network requests
+|       |   +-- console.json   # Console logs
+|       |   +-- variables.json # RF variables snapshot
+|       +-- 002_input_text/
+|       |   +-- ...
+|       +-- 003_click_button/
+|           +-- ...
 ```
 
 ## Interactive Viewer
 
-The HTML viewer provides keyboard navigation for efficient trace browsing:
+The HTML viewer provides keyboard navigation and search:
 
 | Keyboard Shortcut | Action |
 |---|---|
-| `↑` or `k` | Go to previous keyword |
-| `↓` or `j` | Go to next keyword |
+| `Arrow Up` or `k` | Go to previous keyword |
+| `Arrow Down` or `j` | Go to next keyword |
 | `Home` | Jump to first keyword |
 | `End` | Jump to last keyword |
-| `Left Click` on keyword | Select and view details |
+| `/` | Focus search bar |
+| `Escape` | Clear search |
 
 The viewer displays four panels:
 1. **Screenshot**: Visual browser state
@@ -415,11 +505,21 @@ The viewer displays four panels:
 3. **Console**: Browser console logs
 4. **Network**: HTTP requests/responses
 
+Search and filter by keyword name or status (ALL/PASS/FAIL/SKIP) at the top of the keyword list.
+
 ## Requirements
 
 - Python 3.9+
 - Robot Framework 6.0+ or 7.0+
 - SeleniumLibrary 6.0+ or Browser Library 18.0+ (for browser capture)
+
+### Optional Dependencies
+
+| Extra | Package | Purpose |
+|-------|---------|---------|
+| `media` | Pillow >= 9.0 | GIF generation, visual diff, WebP compression |
+| `pdf` | weasyprint >= 60.0 | PDF export |
+| `all` | Both above | All optional features |
 
 ## Development
 
